@@ -8,7 +8,7 @@ import { str, type ActionState } from "@/lib/action";
 
 /** 初回セットアップ: スタッフが0人のときだけ最初のオーナーを作成できる */
 export async function setupOwner(_: ActionState, fd: FormData): Promise<ActionState> {
-  const facilityName = str(fd, "facilityName") || "CourtBase";
+  const facilityName = str(fd, "facilityName") || "pickleland";
   const name = str(fd, "name");
   const email = str(fd, "email").toLowerCase();
   const pw = str(fd, "password");

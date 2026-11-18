@@ -8,7 +8,7 @@ const dayKey = (offset: number) => new Date(Date.now() + 9 * 3600_000 + offset *
 async function main() {
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@example.com";
   const password = process.env.SEED_OWNER_PASSWORD ?? "ChangeMe123";
-  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "CourtBase ピックルボール" } });
+  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "pickleland" } });
   const owner = await db.staff.upsert({
     where: { email },
     update: {},

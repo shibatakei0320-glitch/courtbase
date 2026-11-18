@@ -8,7 +8,7 @@ export const metadata = { title: "施設設定" };
 
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
-  const s = (await db.setting.findUnique({ where: { id: 1 } })) ?? { facilityName: "CourtBase", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null };
+  const s = (await db.setting.findUnique({ where: { id: 1 } })) ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null };
   return (
     <>
       <PageHeader title="施設設定" />

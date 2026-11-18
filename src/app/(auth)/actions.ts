@@ -68,7 +68,7 @@ export async function requestReset(_: ActionState, fd: FormData): Promise<Action
     const url = `${appUrl()}/reset-password/${token}`;
     await sendMail(
       staff.email,
-      "【CourtBase】パスワード再設定のご案内",
+      "【pickleland】パスワード再設定のご案内",
       `${staff.name} 様\n\n以下のURLから1時間以内にパスワードを再設定してください。\n${url}\n\nお心当たりがない場合はこのメールを破棄してください。`,
     );
     await audit(staff.id, "password.reset_requested", staff.email);
