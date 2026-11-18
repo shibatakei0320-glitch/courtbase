@@ -138,8 +138,8 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
           {!canceled && (
             <div className="card p-4">
               <h2 className="mb-2 font-semibold text-red-700">枠の中止</h2>
-              <p className="mb-3 text-xs text-slate-500">この枠の予約はすべてキャンセルされます。</p>
-              <ActionForm action={cancelSlot} confirm="この枠を中止しますか？">
+              <p className="mb-3 text-xs text-slate-500">この枠の予約はすべてキャンセルされ、カードで支払い済みの分は全額返金されます。会員にはLINEでお知らせします。</p>
+              <ActionForm action={cancelSlot} confirm="この枠を中止しますか？（カードで支払い済みの予約は全額返金されます）">
                 <input type="hidden" name="id" value={slot.id} />
                 <Submit className="btn-danger">中止する</Submit>
               </ActionForm>
@@ -159,7 +159,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
 
 function StatusBtn({ id, status, label, danger }: { id: string; status: string; label: string; danger?: boolean }) {
   return (
-    <ActionForm action={setReservationStatus} confirm={danger ? "この予約を取り消しますか？" : undefined}>
+    <ActionForm action={setReservationStatus} confirm={danger ? "この予約を取り消しますか？（カードで支払い済みの場合は全額返金されます）" : undefined}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
       <Submit className={`${danger ? "btn-danger" : "btn-secondary"} btn-sm`}>{label}</Submit>

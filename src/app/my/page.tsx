@@ -15,7 +15,7 @@ const KINDS: { key: SlotKind | "ALL"; label: string }[] = [
 ];
 const KIND_LABEL: Record<SlotKind, string> = { RENTAL: "コート利用", LESSON: "レッスン", EVENT: "大会・イベント" };
 
-export default async function MyPage({ searchParams }: { searchParams: Promise<{ paid?: string; applied?: string; kind?: string }> }) {
+export default async function MyPage({ searchParams }: { searchParams: Promise<{ paid?: string; applied?: string; kind?: string; canceled?: string }> }) {
   const me = await requireMember();
   const sp = await searchParams;
   const kind = KINDS.some((k) => k.key === sp.kind && k.key !== "ALL") ? (sp.kind as SlotKind) : null;
@@ -27,7 +27,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
       orderBy: { slot: { startsAt: "asc" } },
     }),
     db.slot.findMany({
-      where: { status: "OPEN", startsAt: { gt: now }, ...(kind ? { kind } : {}) },
+      where: { status: "OPEN", memberBooked: false, startsAt: { gt: now }, ...(kind ? { kind } : {}) },
       include: { _count: { select: { reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
       orderBy: { startsAt: "asc" },
       take: 60,
@@ -53,6 +53,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
               <p className="mt-3 text-sm text-white/70">{nd.w}曜日　{hm(next.startsAt)}–{hm(next.endsAt)}</p>
               <p className="mt-5 max-w-[16rem] text-lg font-medium leading-snug">{next.title}</p>
               <p className="mt-1 text-sm text-white/60">{next.court.name}</p>
+              <Link href={`/my/events/${next.id}`} className="mt-5 inline-block border-b border-white/40 pb-0.5 text-xs text-white/80 hover:border-white hover:text-white">予約の詳細・キャンセル</Link>
             </>
           ) : (
             <>
@@ -64,14 +65,21 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         </div>
       </section>
 
-      <Link href="/my/card" className="flex items-center justify-between rounded-2xl bg-white px-5 py-4 text-sm font-medium focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
-        <span>会員証（入退場用QRコード）</span>
-        <span className="text-xs text-[#13201A]/50">表示する</span>
-      </Link>
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/my/court" className="rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+          <span className="block text-sm font-bold">コートを予約</span>
+          <span className="mt-1 block text-xs text-[#13201A]/50">時間を選んで予約</span>
+        </Link>
+        <Link href="/my/card" className="rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+          <span className="block text-sm font-bold">会員証</span>
+          <span className="mt-1 block text-xs text-[#13201A]/50">入退場用QRコード</span>
+        </Link>
+      </div>
       </div>
 
       {sp.paid && <Notice>お支払いが完了しました。予約の反映まで数秒かかることがあります。表示されないときはページを再読み込みしてください。</Notice>}
       {sp.applied && <Notice>予約が完了しました。</Notice>}
+      {sp.canceled !== undefined && <Notice>予約をキャンセルしました。{Number(sp.canceled) > 0 ? `${yen(Number(sp.canceled))}を返金しました。カード会社によって、明細への反映まで数日〜2週間ほどかかります。` : ""}</Notice>}
 
       {rest.length > 0 && (
         <section>
@@ -80,12 +88,14 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
             {rest.map((r) => {
               const d = jst(r.slot.startsAt);
               return (
-                <li key={r.id} className="flex items-baseline gap-5 px-1 py-4">
-                  <span className="w-14 shrink-0 font-display text-2xl font-medium leading-none text-[#0F3D2E]">{d.m}.{String(d.d).padStart(2, "0")}</span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{r.slot.title}</span>
-                    <span className="text-xs text-[#13201A]/55">{d.w}曜日　{hm(r.slot.startsAt)}–{hm(r.slot.endsAt)}　{r.slot.court.name}</span>
-                  </span>
+                <li key={r.id}>
+                  <Link href={`/my/events/${r.slotId}`} className="flex items-baseline gap-5 px-1 py-4 hover:underline hover:underline-offset-4">
+                    <span className="w-14 shrink-0 font-display text-2xl font-medium leading-none text-[#0F3D2E]">{d.m}.{String(d.d).padStart(2, "0")}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{r.slot.title}</span>
+                      <span className="text-xs text-[#13201A]/55">{d.w}曜日　{hm(r.slot.startsAt)}–{hm(r.slot.endsAt)}　{r.slot.court.name}</span>
+                    </span>
+                  </Link>
                 </li>
               );
             })}

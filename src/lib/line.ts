@@ -12,6 +12,8 @@ export function lineAuthorizeUrl(state: string, nonce: string) {
     state,
     scope: "profile openid",
     nonce,
+    // LINE公式アカウントと連携している場合、ログイン時に友だち追加を案内（通知を受け取るため）
+    bot_prompt: "aggressive",
   });
   return `https://access.line.me/oauth2/v2.1/authorize?${q}`;
 }

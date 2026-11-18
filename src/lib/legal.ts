@@ -2,10 +2,11 @@
 
 export const DISCLOSE_ON_REQUEST = "請求があった場合には遅滞なく開示いたします";
 
-export const DEFAULT_CANCEL_POLICY =
-  "お申込み後のお客様都合によるキャンセル・返金は、施設スタッフまでお問い合わせください。施設の都合により開催・利用を中止した場合は、お支払いいただいた料金を全額返金します。";
+export function cancelPolicy(hours: number) {
+  return `ご予約の開始${hours}時間前までは、会員ページからキャンセルでき、お支払いいただいた料金を全額返金します。それ以降のお客様都合によるキャンセルは返金できません（やむを得ない事情がある場合は施設スタッフにご相談ください）。施設の都合により開催・利用を中止した場合は、全額返金します。返金はご利用のカード会社を通じて行われ、明細への反映まで数日〜2週間ほどかかる場合があります。`;
+}
 
-export function defaultTerms(facility: string) {
+export function defaultTerms(facility: string, hours = 24) {
   return `この利用規約（以下「本規約」）は、${facility}（以下「当施設」）が提供する会員サービスおよび施設の利用条件を定めるものです。
 
 第1条（会員登録）
@@ -18,7 +19,7 @@ export function defaultTerms(facility: string) {
 3. 定員に達した場合など、予約が成立しなかったときは、お支払いいただいた料金を返金します。
 
 第3条（キャンセル）
-${DEFAULT_CANCEL_POLICY}
+${cancelPolicy(hours)}
 
 第4条（施設の利用）
 1. 会員は、当施設の案内およびスタッフの指示に従って施設を利用するものとします。

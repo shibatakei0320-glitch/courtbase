@@ -4,7 +4,9 @@ import { db } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { yen } from "@/lib/format";
-import { applyEvent } from "../../actions";
+import { applyEvent, cancelMyReservation } from "../../actions";
+import { cancelDeadline } from "@/lib/booking";
+import { fmtDateTime } from "@/lib/format";
 import { Court, Fill, hm, jst } from "../../ui";
 
 export const metadata = { title: "予約" };
@@ -19,7 +21,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     db.reservation.count({ where: { slotId: id, status: { in: ["RESERVED", "ATTENDED"] } } }),
     db.reservation.findFirst({ where: { slotId: id, memberId: me.id, status: { in: ["RESERVED", "ATTENDED"] } } }),
   ]);
+  if (slot.memberBooked && !mine) notFound();
   const left = Math.max(0, slot.capacity - taken);
+  const deadline = await cancelDeadline(slot.startsAt);
+  const paid = mine ? await db.payment.findFirst({ where: { reservationId: mine.id, refundedAt: null, amount: { gt: 0 } } }) : null;
+  const canCancel = mine?.status === "RESERVED" && Date.now() <= deadline.at.getTime();
   const closed = slot.status !== "OPEN" || slot.startsAt <= new Date();
   const d = jst(slot.startsAt);
   const about = [slot.program?.description, slot.note].filter(Boolean).join("\n\n");
@@ -41,6 +47,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <dl className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10 px-1 text-sm">
         <div className="flex justify-between gap-4 py-4"><dt className="text-[#13201A]/55">場所</dt><dd className="font-medium">{slot.court.name}</dd></div>
         <div className="flex items-baseline justify-between gap-4 py-4"><dt className="text-[#13201A]/55">料金</dt><dd className="font-display text-2xl font-medium leading-none">{slot.price > 0 ? yen(slot.price) : "無料"}</dd></div>
+        {!slot.memberBooked && (
         <div className="py-4">
           <div className="flex justify-between gap-4">
             <dt className="text-[#13201A]/55">定員</dt>
@@ -48,9 +55,31 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           </div>
           <div className="mt-3"><Fill taken={taken} capacity={slot.capacity} /></div>
         </div>
+        )}
       </dl>
 
-      {about && <p className="whitespace-pre-wrap px-1 text-sm leading-[1.9] text-[#13201A]/80">{about}</p>}
+      {about && !slot.memberBooked && <p className="whitespace-pre-wrap px-1 text-sm leading-[1.9] text-[#13201A]/80">{about}</p>}
+
+      {mine?.status === "RESERVED" && (
+        <section className="px-1">
+          <h2 className="text-sm font-bold">キャンセル</h2>
+          {canCancel ? (
+            <>
+              <p className="mt-2 text-sm leading-relaxed text-[#13201A]/65">
+                {fmtDateTime(deadline.at)}までキャンセルできます。{paid ? `お支払いいただいた${yen(paid.amount)}は全額返金されます。` : ""}
+              </p>
+              <ActionForm action={cancelMyReservation} confirm="この予約をキャンセルしますか？" className="mt-3">
+                <input type="hidden" name="id" value={mine.id} />
+                <Submit className="rounded-xl border border-[#B4371F]/40 px-5 py-3 text-sm font-bold text-[#B4371F] transition hover:bg-[#B4371F]/5 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B4371F]">
+                  予約をキャンセルする
+                </Submit>
+              </ActionForm>
+            </>
+          ) : (
+            <p className="mt-2 text-sm leading-relaxed text-[#13201A]/65">キャンセルの期限（開始の{deadline.hours}時間前）を過ぎました。やむを得ない場合は施設スタッフにお問い合わせください。</p>
+          )}
+        </section>
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-10 bg-[#F2F3F0]/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
         <div className="mx-auto max-w-xl">

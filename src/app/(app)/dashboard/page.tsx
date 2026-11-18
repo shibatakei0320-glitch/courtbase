@@ -7,19 +7,19 @@ import { addDays, fmtTime, fromJst, jstDateKey, yen } from "@/lib/format";
 export const metadata = { title: "ダッシュボード" };
 
 export default async function Dashboard() {
-  const me = await requireStaff();
+  await requireStaff();
   const today = jstDateKey(new Date());
   const start = fromJst(today);
   const end = fromJst(addDays(today, 1));
   const monthStart = fromJst(today.slice(0, 8) + "01");
-  const [slots, activeMembers, newMembers, monthSales, todaySales, todayRes] = await Promise.all([
+  const [slots, activeMembers, inside, monthSales, todaySales, todayRes] = await Promise.all([
     db.slot.findMany({
       where: { startsAt: { gte: start, lt: end }, status: "OPEN" },
       include: { court: true, _count: { select: { reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
       orderBy: { startsAt: "asc" },
     }),
     db.member.count({ where: { status: "ACTIVE" } }),
-    db.member.count({ where: { joinedAt: { gte: monthStart } } }),
+    db.visit.count({ where: { checkInAt: { gte: start }, checkOutAt: null } }),
     db.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: monthStart } } }),
     db.payment.aggregate({ _sum: { amount: true }, where: { paidAt: { gte: start, lt: end } } }),
     db.reservation.count({ where: { status: { in: ["RESERVED", "ATTENDED"] }, slot: { startsAt: { gte: start, lt: end } } } }),
@@ -27,13 +27,16 @@ export default async function Dashboard() {
   const capacity = slots.reduce((s, x) => s + x.capacity, 0);
   return (
     <>
-      <PageHeader title={`おはようございます、${me.name}さん`} />
+      <PageHeader
+        title="今日の状況"
+        actions={<><Link href="/checkin" className="btn-primary">QRで入退場を受付</Link><Link href="/schedule/new" className="btn-secondary">枠を作成</Link></>}
+      />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Kpi label="いま在館中" value={`${inside}名`} />
         <Kpi label="本日の予約" value={`${todayRes} / ${capacity}`} sub={capacity ? `稼働率 ${Math.round((todayRes / capacity) * 100)}%` : "枠なし"} />
         <Kpi label="本日の売上" value={yen(todaySales._sum.amount ?? 0)} />
         <Kpi label="今月の売上" value={yen(monthSales._sum.amount ?? 0)} />
         <Kpi label="有効会員数" value={`${activeMembers}名`} />
-        <Kpi label="今月の新規入会" value={`${newMembers}名`} />
       </div>
       <div className="card">
         <div className="flex items-center justify-between border-b px-4 py-3">

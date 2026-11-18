@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { DEFAULT_CANCEL_POLICY, DISCLOSE_ON_REQUEST } from "@/lib/legal";
+import { DISCLOSE_ON_REQUEST, cancelPolicy } from "@/lib/legal";
 import { LegalDoc } from "../Doc";
 
 export const metadata = { title: "特定商取引法に基づく表記" };
@@ -17,7 +17,7 @@ export default async function Tokushoho() {
     ["支払方法", "クレジットカード決済"],
     ["支払時期", "お申込み時にお支払いが確定します"],
     ["サービスの提供時期", "お申込みいただいた日時"],
-    ["キャンセル・返金", s?.legalNotes || DEFAULT_CANCEL_POLICY],
+    ["キャンセル・返金", s?.legalNotes || cancelPolicy(s?.cancelDeadlineHours ?? 24)],
   ];
   return (
     <LegalDoc title="特定商取引法に基づく表記">

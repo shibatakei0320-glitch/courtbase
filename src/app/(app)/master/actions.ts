@@ -35,7 +35,14 @@ export async function saveCourt(_: ActionState, fd: FormData): Promise<ActionSta
   const id = str(fd, "id");
   const name = str(fd, "name");
   if (!name) return { error: "コート名を入力してください" };
-  const data = { name, description: optStr(fd, "description"), active: id ? bool(fd, "active") : true, sortOrder: int(fd, "sortOrder") };
+  const data = {
+    name,
+    description: optStr(fd, "description"),
+    hourlyPrice: Math.max(0, int(fd, "hourlyPrice")),
+    memberBookable: bool(fd, "memberBookable"),
+    active: id ? bool(fd, "active") : true,
+    sortOrder: int(fd, "sortOrder"),
+  };
   if (id) await db.court.update({ where: { id }, data });
   else await db.court.create({ data });
   await audit(me.id, id ? "court.update" : "court.create", name);

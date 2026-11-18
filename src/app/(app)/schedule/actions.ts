@@ -7,9 +7,13 @@ import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { BookingError, book, cancelReservation } from "@/lib/booking";
 import { int, optStr, str, type ActionState } from "@/lib/action";
-import { fromJst } from "@/lib/format";
+import { fromJst, yen } from "@/lib/format";
+import { refundReservation } from "@/lib/refund";
+import { clearExpiredHolds } from "@/lib/court-booking";
+import { notifyBooked, notifyCanceled } from "@/lib/notify";
 
 async function overlaps(courtId: string, start: Date, end: Date, excludeId?: string) {
+  await clearExpiredHolds(courtId);
   return db.slot.findFirst({
     where: { courtId, status: "OPEN", startsAt: { lt: end }, endsAt: { gt: start }, ...(excludeId ? { NOT: { id: excludeId } } : {}) },
   });
@@ -77,10 +81,16 @@ export async function cancelSlot(_: ActionState, fd: FormData): Promise<ActionSt
   const id = str(fd, "id");
   await db.slot.update({ where: { id }, data: { status: "CANCELED" } });
   const active = await db.reservation.findMany({ where: { slotId: id, status: "RESERVED" } });
-  for (const r of active) await cancelReservation(r.id);
-  await audit(me.id, "slot.cancel", id, `予約${active.length}件をキャンセル`);
+  let refunded = 0;
+  for (const r of active) {
+    await cancelReservation(r.id);
+    const amt = await refundReservation(r.id, "施設都合による中止");
+    refunded += amt;
+    await notifyCanceled(r.id, amt, true);
+  }
+  await audit(me.id, "slot.cancel", id, `予約${active.length}件をキャンセル 返金${refunded}`);
   revalidatePath(`/schedule/${id}`);
-  return { ok: `枠を中止しました（予約 ${active.length} 件をキャンセルしました）` };
+  return { ok: `枠を中止しました（予約 ${active.length} 件をキャンセル${refunded > 0 ? `、${yen(refunded)}を返金` : ""}）` };
 }
 
 export async function deleteSlot(fd: FormData) {
@@ -100,6 +110,7 @@ export async function addReservation(_: ActionState, fd: FormData): Promise<Acti
   try {
     const r = await book(slotId, memberId);
     await audit(me.id, "reservation.create", r.id);
+    await notifyBooked(r.id);
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };
     throw e;
@@ -116,7 +127,9 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   try {
     if (status === "CANCELED") {
       await cancelReservation(id);
-      msg = "キャンセルしました";
+      const amt = await refundReservation(id, "スタッフによる取消");
+      await notifyCanceled(id, amt);
+      msg = amt > 0 ? `キャンセルし、${yen(amt)}を返金しました` : "キャンセルしました";
     } else if (["RESERVED", "ATTENDED", "NO_SHOW"].includes(status)) {
       const r = await db.reservation.findUniqueOrThrow({ where: { id } });
       if (r.status === "CANCELED") return { error: "キャンセル済みの予約は変更できません" };

@@ -21,9 +21,18 @@ export async function book(slotId: string, memberId: string) {
   });
 }
 
-/** 予約キャンセル */
+/** 予約キャンセル。会員が時間指定で予約したコート利用なら、その時間も空ける */
 export async function cancelReservation(id: string) {
-  const r = await db.reservation.findUnique({ where: { id } });
+  const r = await db.reservation.findUnique({ where: { id }, include: { slot: true } });
   if (!r || r.status === "CANCELED") throw new BookingError("キャンセルできる予約がありません");
   await db.reservation.update({ where: { id }, data: { status: "CANCELED", canceledAt: new Date() } });
+  if (r.slot.memberBooked) await db.slot.update({ where: { id: r.slotId }, data: { status: "CANCELED" } });
+  return r;
+}
+
+/** キャンセル期限（この時刻を過ぎると会員はキャンセルできない） */
+export async function cancelDeadline(startsAt: Date) {
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  const hours = s?.cancelDeadlineHours ?? 24;
+  return { hours, at: new Date(startsAt.getTime() - hours * 3600_000) };
 }
