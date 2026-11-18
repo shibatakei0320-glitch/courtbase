@@ -14,15 +14,15 @@ export const hm = (d: Date) => d.toLocaleTimeString("ja-JP", { timeZone: TZ, hou
 export function CourtLines({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 440 200" preserveAspectRatio="xMidYMid slice" aria-hidden className={`pointer-events-none absolute inset-0 h-full w-full ${className}`}>
-      <g fill="none" stroke="white" strokeOpacity="0.28" strokeWidth="2">
+      <g fill="none" stroke="white" strokeOpacity="0.2" strokeWidth="2">
         <rect x="20" y="20" width="400" height="160" />
         <line x1="156" y1="20" x2="156" y2="180" />
         <line x1="284" y1="20" x2="284" y2="180" />
         <line x1="20" y1="100" x2="156" y2="100" />
         <line x1="284" y1="100" x2="420" y2="100" />
       </g>
-      <rect x="156" y="20" width="128" height="160" fill="white" fillOpacity="0.05" />
-      <line x1="220" y1="12" x2="220" y2="188" stroke="white" strokeOpacity="0.55" strokeWidth="3" strokeDasharray="2 4" />
+      <rect x="156" y="20" width="128" height="160" fill="white" fillOpacity="0.04" />
+      <line x1="220" y1="12" x2="220" y2="188" stroke="white" strokeOpacity="0.32" strokeWidth="2.5" strokeDasharray="2 4" />
     </svg>
   );
 }
