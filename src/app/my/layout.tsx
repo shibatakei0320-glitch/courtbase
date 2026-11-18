@@ -23,7 +23,12 @@ export default async function MemberLayout({ children }: { children: React.React
           </form>
         )}
       </header>
-      <main className="mx-auto max-w-xl px-4 pb-28">{children}</main>
+      <main className="mx-auto max-w-xl px-4 pb-8">{children}</main>
+      <footer className="mx-auto flex max-w-xl flex-wrap gap-x-5 gap-y-2 px-5 pb-32 pt-4 text-xs text-[#13201A]/45">
+        <Link href="/my/legal/terms" className="hover:text-[#13201A]">利用規約</Link>
+        <Link href="/my/legal/privacy" className="hover:text-[#13201A]">プライバシーポリシー</Link>
+        <Link href="/my/legal/tokushoho" className="hover:text-[#13201A]">特定商取引法に基づく表記</Link>
+      </footer>
     </div>
   );
 }

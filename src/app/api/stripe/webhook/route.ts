@@ -33,7 +33,7 @@ async function fulfill(s: Stripe.Checkout.Session) {
   const paymentIntent = typeof s.payment_intent === "string" ? s.payment_intent : (s.payment_intent?.id ?? null);
   if (!slotId || !memberId) return;
   const slot = await db.slot.findUnique({ where: { id: slotId } });
-  const label = slot ? `${slot.title}（${fmtDateTime(slot.startsAt)}）参加費` : "イベント参加費";
+  const label = slot ? `${slot.title}（${fmtDateTime(slot.startsAt)}）` : "予約料金";
 
   // 決済の記録を先に作成（stripeSessionId が一意なので、Webhookの重複配信はここで弾かれる）
   try {

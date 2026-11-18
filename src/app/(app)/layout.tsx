@@ -11,6 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const setting = await db.setting.findUnique({ where: { id: 1 } });
   const items: NavItem[] = [
     { href: "/dashboard", label: "ダッシュボード" },
+    { href: "/checkin", label: "入退場（QR）" },
     { href: "/schedule", label: "スケジュール" },
     { href: "/reservations", label: "予約一覧" },
     { href: "/members", label: "会員" },

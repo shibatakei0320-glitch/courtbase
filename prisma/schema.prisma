@@ -117,6 +117,7 @@ model Member {
   reservations Reservation[]
   payments     Payment[]
   sessions     MemberSession[]
+  visits       Visit[]
 }
 
 model MemberSession {
@@ -247,4 +248,26 @@ model Setting {
   cancelDeadlineHours Int     @default(24)
   sessionHours        Int     @default(12)
   contactEmail        String?
+  // 特定商取引法に基づく表記
+  legalSeller         String?
+  legalManager        String?
+  legalAddress        String?
+  legalPhone          String?
+  legalEmail          String?
+  legalNotes          String?
+  // 利用規約・プライバシーポリシー（空なら既定の文面）
+  termsText           String?
+  privacyText         String?
+}
+
+model Visit {
+  id         String    @id @default(cuid())
+  memberId   String
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  checkInAt  DateTime  @default(now())
+  checkOutAt DateTime?
+  staffId    String?
+
+  @@index([checkInAt])
+  @@index([memberId, checkInAt])
 }

@@ -14,6 +14,14 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     cancelDeadlineHours: Math.max(0, int(fd, "cancelDeadlineHours", 24)),
     sessionHours: Math.min(720, Math.max(1, int(fd, "sessionHours", 12))),
     contactEmail: optStr(fd, "contactEmail"),
+    legalSeller: optStr(fd, "legalSeller"),
+    legalManager: optStr(fd, "legalManager"),
+    legalAddress: optStr(fd, "legalAddress"),
+    legalPhone: optStr(fd, "legalPhone"),
+    legalEmail: optStr(fd, "legalEmail"),
+    legalNotes: optStr(fd, "legalNotes"),
+    termsText: optStr(fd, "termsText"),
+    privacyText: optStr(fd, "privacyText"),
   };
   await db.setting.upsert({ where: { id: 1 }, update: data, create: { id: 1, ...data } });
   await audit(me.id, "setting.update");

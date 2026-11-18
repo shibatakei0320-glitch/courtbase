@@ -34,7 +34,7 @@ export default async function RegisterPage() {
           </label>
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" name="agree" value="1" required className="mt-0.5 h-4 w-4 accent-[#0F3D2E]" />
-            利用規約と個人情報の取扱いに同意します
+            <span><a href="/my/legal/terms" target="_blank" className="underline underline-offset-2">利用規約</a>と<a href="/my/legal/privacy" target="_blank" className="underline underline-offset-2">プライバシーポリシー</a>に同意します</span>
           </label>
           <Submit className="w-full rounded-xl bg-[#0F3D2E] py-4 text-sm font-bold text-white transition hover:bg-[#0B2F23] active:scale-[0.99] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
             登録する

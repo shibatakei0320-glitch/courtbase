@@ -18,6 +18,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
       plan: true,
       reservations: { include: { slot: { include: { court: true } } }, orderBy: { slot: { startsAt: "desc" } }, take: 50 },
       payments: { orderBy: { paidAt: "desc" }, take: 50 },
+      visits: { orderBy: { checkInAt: "desc" }, take: 30 },
     },
   });
   if (!member) notFound();
@@ -56,6 +57,20 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <td>{r.slot.court.name}</td>
                   <td>{RES_STATUS[r.status]}</td>
                 </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <h2 className="mb-3 mt-8 font-semibold">入退場履歴</h2>
+      <div className="card overflow-x-auto">
+        {member.visits.length === 0 ? <Empty>入退場の記録はありません</Empty> : (
+          <table className="table">
+            <thead><tr><th>入場</th><th>退場</th></tr></thead>
+            <tbody>
+              {member.visits.map((v) => (
+                <tr key={v.id}><td>{fmtDateTime(v.checkInAt)}</td><td>{v.checkOutAt ? fmtDateTime(v.checkOutAt) : "-"}</td></tr>
               ))}
             </tbody>
           </table>

@@ -1,14 +1,24 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
+import type { SlotKind } from "@prisma/client";
 import { yen } from "@/lib/format";
 import { Court, Fill, Notice, hm, jst } from "./ui";
 
 export const metadata = { title: "マイページ" };
 
-export default async function MyPage({ searchParams }: { searchParams: Promise<{ paid?: string; applied?: string }> }) {
+const KINDS: { key: SlotKind | "ALL"; label: string }[] = [
+  { key: "ALL", label: "すべて" },
+  { key: "RENTAL", label: "コート利用" },
+  { key: "LESSON", label: "レッスン" },
+  { key: "EVENT", label: "大会・イベント" },
+];
+const KIND_LABEL: Record<SlotKind, string> = { RENTAL: "コート利用", LESSON: "レッスン", EVENT: "大会・イベント" };
+
+export default async function MyPage({ searchParams }: { searchParams: Promise<{ paid?: string; applied?: string; kind?: string }> }) {
   const me = await requireMember();
   const sp = await searchParams;
+  const kind = KINDS.some((k) => k.key === sp.kind && k.key !== "ALL") ? (sp.kind as SlotKind) : null;
   const now = new Date();
   const [mine, events] = await Promise.all([
     db.reservation.findMany({
@@ -17,10 +27,10 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
       orderBy: { slot: { startsAt: "asc" } },
     }),
     db.slot.findMany({
-      where: { kind: "EVENT", status: "OPEN", startsAt: { gt: now } },
+      where: { status: "OPEN", startsAt: { gt: now }, ...(kind ? { kind } : {}) },
       include: { _count: { select: { reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
       orderBy: { startsAt: "asc" },
-      take: 50,
+      take: 60,
     }),
   ]);
   const myIds = new Set(mine.map((r) => r.slotId));
@@ -30,6 +40,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
 
   return (
     <div className="space-y-10">
+      <div className="space-y-3">
       <section className="relative overflow-hidden rounded-2xl bg-[#0F3D2E] px-6 pb-8 pt-7 text-white">
         <Court className="-right-10 -top-16 h-[22rem] rotate-[-8deg]" />
         <div className="relative">
@@ -47,14 +58,20 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
             <>
               <p className="text-xs text-white/60">{me.firstName}さん</p>
               <p className="mt-4 text-[1.9rem] font-medium leading-[1.35] tracking-wide">コートに立つ日を、<br />選ぶ。</p>
-              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">募集中の大会・イベントから申し込めます。</p>
+              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">コートの利用、レッスン、大会・イベントをここから予約できます。</p>
             </>
           )}
         </div>
       </section>
 
-      {sp.paid && <Notice>お支払いが完了しました。申込みの反映まで数秒かかることがあります。表示されないときはページを再読み込みしてください。</Notice>}
-      {sp.applied && <Notice>申込みが完了しました。</Notice>}
+      <Link href="/my/card" className="flex items-center justify-between rounded-2xl bg-white px-5 py-4 text-sm font-medium focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+        <span>会員証（入退場用QRコード）</span>
+        <span className="text-xs text-[#13201A]/50">表示する</span>
+      </Link>
+      </div>
+
+      {sp.paid && <Notice>お支払いが完了しました。予約の反映まで数秒かかることがあります。表示されないときはページを再読み込みしてください。</Notice>}
+      {sp.applied && <Notice>予約が完了しました。</Notice>}
 
       {rest.length > 0 && (
         <section>
@@ -77,13 +94,28 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
       )}
 
       <section>
-        <div className="mb-2 flex items-baseline justify-between px-1">
-          <h2 className="text-sm font-bold">大会・イベント</h2>
-          {events.length > 0 && <span className="font-display text-sm text-[#13201A]/50">{events.length}件募集中</span>}
+        <div className="mb-3 flex items-baseline justify-between px-1">
+          <h2 className="text-sm font-bold">予約できる枠</h2>
+          {events.length > 0 && <span className="font-display text-sm text-[#13201A]/50">{events.length}件</span>}
         </div>
+        <nav className="mb-2 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="種類で絞り込む">
+          {KINDS.map((k) => {
+            const active = (kind ?? "ALL") === k.key;
+            return (
+              <Link
+                key={k.key}
+                href={k.key === "ALL" ? "/my" : `/my?kind=${k.key}`}
+                aria-current={active ? "page" : undefined}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs ${active ? "bg-[#0F3D2E] text-white" : "text-[#13201A]/60 hover:text-[#13201A]"}`}
+              >
+                {k.label}
+              </Link>
+            );
+          })}
+        </nav>
         {events.length === 0 ? (
           <p className="border-y border-[#13201A]/10 px-1 py-10 text-sm leading-relaxed text-[#13201A]/55">
-            いま募集中の大会・イベントはありません。新しい募集はここに表示されます。
+            いま予約できる枠はありません。新しい枠が公開されると、ここに表示されます。
           </p>
         ) : (
           <ul className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10">
@@ -100,12 +132,13 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
                       <span className="mt-1 block text-xs text-[#13201A]/55">{d.w}曜日</span>
                     </span>
                     <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-[#13201A]/45">{KIND_LABEL[s.kind]}</span>
                       <span className="block font-medium leading-snug group-hover:underline group-hover:underline-offset-4">{s.title}</span>
                       <span className="mt-1 block text-xs text-[#13201A]/55">{hm(s.startsAt)}–{hm(s.endsAt)}　{s.price > 0 ? yen(s.price) : "参加無料"}</span>
                       <span className="mt-3 flex items-center gap-3">
                         <span className="flex-1"><Fill taken={taken} capacity={s.capacity} /></span>
                         <span className={`shrink-0 text-xs ${joined ? "font-bold text-[#0F3D2E]" : left <= 0 ? "text-[#13201A]/40" : left <= 3 ? "font-bold text-[#B4371F]" : "text-[#13201A]/60"}`}>
-                          {joined ? "申込み済み" : left <= 0 ? "満員" : `残り${left}名`}
+                          {joined ? "予約済み" : left <= 0 ? "満員" : `残り${left}名`}
                         </span>
                       </span>
                     </span>
@@ -117,7 +150,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         )}
       </section>
 
-      <p className="px-1 text-xs leading-relaxed text-[#13201A]/45">申込み後のキャンセル・返金は、施設スタッフにお問い合わせください。</p>
+      <p className="px-1 text-xs leading-relaxed text-[#13201A]/45">予約後のキャンセル・返金は、施設スタッフにお問い合わせください。</p>
     </div>
   );
 }

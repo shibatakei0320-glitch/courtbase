@@ -50,19 +50,19 @@ export async function registerMember(_: ActionState, fd: FormData): Promise<Acti
   redirect("/my");
 }
 
-/** 大会・イベントへの申込み。有料ならStripe決済画面へ、無料ならその場で予約 */
+/** 予約・申込み（レッスン・コート貸切・大会/イベント）。有料ならStripe決済画面へ、無料ならその場で予約 */
 export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  if (me.status !== "ACTIVE") return { error: "現在お申込みいただけません（休会中）。施設スタッフにお問い合わせください" };
+  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。施設スタッフにお問い合わせください" };
   const slotId = str(fd, "slotId");
   const slot = await db.slot.findUnique({ where: { id: slotId } });
-  if (!slot || slot.kind !== "EVENT" || slot.status !== "OPEN") return { error: "このイベントには申し込めません" };
+  if (!slot || slot.status !== "OPEN") return { error: "この枠は予約できません" };
   if (slot.startsAt <= new Date()) return { error: "受付は終了しました" };
   const [count, dup] = await Promise.all([
     db.reservation.count({ where: { slotId, status: { in: ["RESERVED", "ATTENDED"] } } }),
     db.reservation.findFirst({ where: { slotId, memberId: me.id, status: { in: ["RESERVED", "ATTENDED"] } } }),
   ]);
-  if (dup) return { error: "既にお申込み済みです" };
+  if (dup) return { error: "すでに予約済みです" };
   if (count >= slot.capacity) return { error: "定員に達しました" };
 
   if (slot.price <= 0) {
