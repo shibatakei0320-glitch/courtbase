@@ -17,7 +17,7 @@ export default async function SettingsPage() {
           <label className="block sm:col-span-2"><span className="label">施設名</span><input className="input" name="facilityName" defaultValue={s.facilityName} /></label>
           <label className="block"><span className="label">営業開始(時)</span><input className="input" type="number" name="openHour" min={0} max={23} defaultValue={s.openHour} /></label>
           <label className="block"><span className="label">営業終了(時)</span><input className="input" type="number" name="closeHour" min={1} max={24} defaultValue={s.closeHour} /></label>
-          <label className="block"><span className="label">キャンセル期限（開始の何時間前まで返却）</span><input className="input" type="number" name="cancelDeadlineHours" min={0} defaultValue={s.cancelDeadlineHours} /></label>
+          <input type="hidden" name="cancelDeadlineHours" value={s.cancelDeadlineHours} />
           <label className="block"><span className="label">ログイン有効時間（時間）</span><input className="input" type="number" name="sessionHours" min={1} max={720} defaultValue={s.sessionHours} /></label>
           <label className="block sm:col-span-2"><span className="label">問い合わせ先メール</span><input className="input" type="email" name="contactEmail" defaultValue={s.contactEmail ?? ""} /></label>
           <div className="sm:col-span-2"><Submit>保存</Submit></div>

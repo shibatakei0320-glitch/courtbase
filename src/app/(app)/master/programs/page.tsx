@@ -18,7 +18,7 @@ export default async function ProgramsPage() {
         <div className="card overflow-x-auto lg:col-span-2">
           {programs.length === 0 ? <Empty>プログラムがありません</Empty> : (
             <table className="table">
-              <thead><tr><th>名称</th><th>種別</th><th>定員</th><th>時間</th><th>料金</th><th>消費チケット</th><th>状態</th><th></th></tr></thead>
+              <thead><tr><th>名称</th><th>種別</th><th>定員</th><th>時間</th><th>料金</th><th>状態</th><th></th></tr></thead>
               <tbody>
                 {programs.map((p) => (
                   <tr key={p.id}>
@@ -27,7 +27,6 @@ export default async function ProgramsPage() {
                     <td>{p.capacity}名</td>
                     <td>{p.durationMin}分</td>
                     <td>{yen(p.price)}</td>
-                    <td>{p.ticketCost}</td>
                     <td>{p.active ? <Badge tone="green">有効</Badge> : <Badge>停止</Badge>}</td>
                     <td>
                       <details>
@@ -61,7 +60,6 @@ function ProgramForm({ program: p }: { program?: Program }) {
         <label className="block"><span className="label">定員</span><input className="input" type="number" min={1} name="capacity" defaultValue={p?.capacity ?? 8} /></label>
         <label className="block"><span className="label">時間(分)</span><input className="input" type="number" min={15} step={15} name="durationMin" defaultValue={p?.durationMin ?? 60} /></label>
         <label className="block"><span className="label">料金(円)</span><input className="input" type="number" min={0} name="price" defaultValue={p?.price ?? 0} /></label>
-        <label className="block"><span className="label">消費チケット</span><input className="input" type="number" min={0} name="ticketCost" defaultValue={p?.ticketCost ?? 1} /></label>
       </div>
       <label className="block"><span className="label">表示色</span><input className="input h-10" type="color" name="color" defaultValue={p?.color ?? "#2563eb"} /></label>
       <label className="block"><span className="label">説明</span><textarea className="input" name="description" rows={2} defaultValue={p?.description ?? ""} /></label>

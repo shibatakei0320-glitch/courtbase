@@ -36,7 +36,6 @@ export async function createSlot(_: ActionState, fd: FormData): Promise<ActionSt
     instructorId: optStr(fd, "instructorId"),
     capacity: Math.max(1, int(fd, "capacity", program?.capacity ?? 1)),
     price: Math.max(0, int(fd, "price", program?.price ?? 0)),
-    ticketCost: Math.max(0, int(fd, "ticketCost", program?.ticketCost ?? 0)),
     note: optStr(fd, "note"),
   };
   const start0 = fromJst(date, time);
@@ -66,7 +65,7 @@ export async function updateSlot(_: ActionState, fd: FormData): Promise<ActionSt
   if (capacity < booked) return { error: `定員を予約数（${booked}名）未満にはできません` };
   await db.slot.update({
     where: { id },
-    data: { title: str(fd, "title"), courtId, startsAt, endsAt, capacity, price: Math.max(0, int(fd, "price")), ticketCost: Math.max(0, int(fd, "ticketCost")), instructorId: optStr(fd, "instructorId"), note: optStr(fd, "note") },
+    data: { title: str(fd, "title"), courtId, startsAt, endsAt, capacity, price: Math.max(0, int(fd, "price")), instructorId: optStr(fd, "instructorId"), note: optStr(fd, "note") },
   });
   await audit(me.id, "slot.update", id);
   revalidatePath(`/schedule/${id}`);
@@ -78,10 +77,10 @@ export async function cancelSlot(_: ActionState, fd: FormData): Promise<ActionSt
   const id = str(fd, "id");
   await db.slot.update({ where: { id }, data: { status: "CANCELED" } });
   const active = await db.reservation.findMany({ where: { slotId: id, status: "RESERVED" } });
-  for (const r of active) await cancelReservation(r.id, true);
+  for (const r of active) await cancelReservation(r.id);
   await audit(me.id, "slot.cancel", id, `予約${active.length}件をキャンセル`);
   revalidatePath(`/schedule/${id}`);
-  return { ok: `枠を中止しました（予約 ${active.length} 件をキャンセルし、チケットを返却しました）` };
+  return { ok: `枠を中止しました（予約 ${active.length} 件をキャンセルしました）` };
 }
 
 export async function deleteSlot(fd: FormData) {
@@ -116,8 +115,8 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   let msg = "更新しました";
   try {
     if (status === "CANCELED") {
-      const { refunded } = await cancelReservation(id, fd.get("refund") === "1");
-      msg = refunded ? `キャンセルしました（チケット${refunded}枚返却）` : "キャンセルしました（期限超過のため返却なし）";
+      await cancelReservation(id);
+      msg = "キャンセルしました";
     } else if (["RESERVED", "ATTENDED", "NO_SHOW"].includes(status)) {
       const r = await db.reservation.findUniqueOrThrow({ where: { id } });
       if (r.status === "CANCELED") return { error: "キャンセル済みの予約は変更できません" };

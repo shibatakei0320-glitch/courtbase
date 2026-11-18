@@ -4,7 +4,7 @@ import type { PaymentMethod } from "@prisma/client";
 import { db } from "@/lib/db";
 import { canManage, requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { bool, int, optStr, str, type ActionState } from "@/lib/action";
+import { int, optStr, str, type ActionState } from "@/lib/action";
 import { fromJst } from "@/lib/format";
 
 export async function createPayment(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -19,15 +19,13 @@ export async function createPayment(_: ActionState, fd: FormData): Promise<Actio
   const description = str(fd, "description") || plan?.name;
   if (!description) return { error: "内容を入力してください" };
   const date = optStr(fd, "paidAt");
-  const grant = bool(fd, "grantTickets") && plan?.kind === "TICKET" && memberId;
   await db.$transaction(async (tx) => {
     await tx.payment.create({ data: { amount, method, description, memberId, planId, staffId: me.id, paidAt: date ? fromJst(date, "12:00") : new Date() } });
-    if (grant && plan?.ticketCount) await tx.member.update({ where: { id: memberId }, data: { tickets: { increment: plan.ticketCount } } });
     if (memberId && plan && plan.kind === "MONTHLY") await tx.member.update({ where: { id: memberId }, data: { planId: plan.id } });
   });
   await audit(me.id, "payment.create", memberId ?? undefined, `${description} ${amount}`);
   revalidatePath("/payments");
-  return { ok: `入金を登録しました${grant ? `（チケット${plan!.ticketCount}枚付与）` : ""}` };
+  return { ok: "入金を登録しました" };
 }
 
 export async function deletePayment(_: ActionState, fd: FormData): Promise<ActionState> {

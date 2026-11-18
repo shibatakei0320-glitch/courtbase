@@ -22,7 +22,6 @@ enum MemberStatus {
 
 enum PlanKind {
   MONTHLY
-  TICKET
   DROP_IN
 }
 
@@ -109,7 +108,6 @@ model Member {
   status    MemberStatus @default(ACTIVE)
   planId    String?
   plan      Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
-  tickets   Int          @default(0)
   joinedAt  DateTime     @default(now())
   note      String?
   createdAt DateTime     @default(now())
@@ -124,7 +122,6 @@ model Plan {
   name        String
   kind        PlanKind @default(MONTHLY)
   price       Int
-  ticketCount Int?
   description String?
   active      Boolean  @default(true)
   sortOrder   Int      @default(0)
@@ -153,7 +150,6 @@ model Program {
   capacity    Int      @default(8)
   durationMin Int      @default(60)
   price       Int      @default(0)
-  ticketCost  Int      @default(1)
   color       String   @default("#2563eb")
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -175,7 +171,6 @@ model Slot {
   endsAt       DateTime
   capacity     Int
   price        Int        @default(0)
-  ticketCost   Int        @default(0)
   status       SlotStatus @default(OPEN)
   note         String?
   createdAt    DateTime   @default(now())
@@ -193,7 +188,6 @@ model Reservation {
   memberId    String
   member      Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
   status      ReservationStatus @default(RESERVED)
-  ticketsUsed Int               @default(0)
   canceledAt  DateTime?
   createdAt   DateTime          @default(now())
 

@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ActionForm, Submit } from "@/components/ActionForm";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MEMBER_STATUS, PAY_METHOD, RES_STATUS, fmtDate, fmtDateTime, yen } from "@/lib/format";
 import { MemberForm } from "../MemberForm";
-import { adjustTickets, updateMember } from "../actions";
+import { updateMember } from "../actions";
 
 export const metadata = { title: "会員詳細" };
 
@@ -31,26 +30,16 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         back="/members"
         actions={<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link>}
       />
-      <div className="mb-6 grid gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="会員番号" value={String(member.memberNo).padStart(6, "0")} />
         <Stat label="ステータス" value={<Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>} />
-        <Stat label="チケット残" value={`${member.tickets} 枚`} />
         <Stat label="累計入金" value={yen(total)} />
       </div>
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card p-6 lg:col-span-2">
+      <div>
+        <div className="card p-6">
           <h2 className="mb-4 font-semibold">会員情報</h2>
           <MemberForm action={updateMember} member={member} plans={plans} />
           <p className="mt-4 text-xs text-slate-400">入会日 {fmtDate(member.joinedAt)} ／ 更新 {fmtDateTime(member.updatedAt)}</p>
-        </div>
-        <div className="card h-fit p-6">
-          <h2 className="mb-4 font-semibold">チケット調整</h2>
-          <ActionForm action={adjustTickets} className="space-y-3" resetOnSuccess>
-            <input type="hidden" name="id" value={member.id} />
-            <label className="block"><span className="label">増減数（減算はマイナス）</span><input className="input" type="number" name="delta" required /></label>
-            <label className="block"><span className="label">理由</span><input className="input" name="reason" placeholder="例: 回数券購入" /></label>
-            <Submit>反映する</Submit>
-          </ActionForm>
         </div>
       </div>
 

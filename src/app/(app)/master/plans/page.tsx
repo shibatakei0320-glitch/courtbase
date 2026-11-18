@@ -22,7 +22,7 @@ export default async function PlansPage() {
                 {plans.map((p) => (
                   <tr key={p.id}>
                     <td className="font-medium">{p.name}</td>
-                    <td>{PLAN_KIND[p.kind]}{p.ticketCount ? `（${p.ticketCount}回）` : ""}</td>
+                    <td>{PLAN_KIND[p.kind]}</td>
                     <td>{yen(p.price)}</td>
                     <td>{p._count.members}</td>
                     <td>{p.active ? <Badge tone="green">有効</Badge> : <Badge>停止</Badge>}</td>
@@ -47,7 +47,7 @@ export default async function PlansPage() {
   );
 }
 
-type P = { id: string; name: string; kind: keyof typeof PLAN_KIND; price: number; ticketCount: number | null; description: string | null; active: boolean; sortOrder: number };
+type P = { id: string; name: string; kind: keyof typeof PLAN_KIND; price: number; description: string | null; active: boolean; sortOrder: number };
 function PlanForm({ plan }: { plan?: P }) {
   return (
     <ActionForm action={savePlan} className="space-y-3" resetOnSuccess={!plan}>
@@ -58,10 +58,7 @@ function PlanForm({ plan }: { plan?: P }) {
           {Object.entries(PLAN_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block"><span className="label">料金(円)</span><input className="input" type="number" min={0} name="price" defaultValue={plan?.price ?? 0} required /></label>
-        <label className="block"><span className="label">回数(回数券)</span><input className="input" type="number" min={1} name="ticketCount" defaultValue={plan?.ticketCount ?? ""} /></label>
-      </div>
+      <label className="block"><span className="label">料金(円)</span><input className="input" type="number" min={0} name="price" defaultValue={plan?.price ?? 0} required /></label>
       <label className="block"><span className="label">説明</span><textarea className="input" name="description" rows={2} defaultValue={plan?.description ?? ""} /></label>
       <label className="block"><span className="label">表示順</span><input className="input" type="number" name="sortOrder" defaultValue={plan?.sortOrder ?? 0} /></label>
       {plan && <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={plan.active} />有効</label>}

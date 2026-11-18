@@ -69,16 +69,3 @@ export async function updateMember(_: ActionState, fd: FormData): Promise<Action
   revalidatePath(`/members/${id}`);
   return { ok: "会員情報を更新しました" };
 }
-
-export async function adjustTickets(_: ActionState, fd: FormData): Promise<ActionState> {
-  const me = await requireStaff();
-  const id = str(fd, "id");
-  const delta = int(fd, "delta");
-  if (delta === 0) return { error: "増減数を入力してください" };
-  const m = await db.member.findUniqueOrThrow({ where: { id } });
-  if (m.tickets + delta < 0) return { error: "残数がマイナスになります" };
-  await db.member.update({ where: { id }, data: { tickets: { increment: delta } } });
-  await audit(me.id, "member.tickets", id, `${delta > 0 ? "+" : ""}${delta} ${str(fd, "reason")}`);
-  revalidatePath(`/members/${id}`);
-  return { ok: `チケットを${delta > 0 ? "付与" : "減算"}しました（残 ${m.tickets + delta}）` };
-}

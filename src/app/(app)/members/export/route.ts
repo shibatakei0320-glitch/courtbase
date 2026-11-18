@@ -27,8 +27,8 @@ export async function GET(req: Request) {
     orderBy: { memberNo: "asc" },
   });
   const rows = [
-    ["会員番号", "姓", "名", "セイ", "メイ", "メール", "電話", "生年月日", "プラン", "チケット残", "ステータス", "入会日"],
-    ...members.map((m) => [m.memberNo, m.lastName, m.firstName, m.lastKana, m.firstKana, m.email, m.phone, m.birthDate ? fmtDate(m.birthDate) : "", m.plan?.name, m.tickets, MEMBER_STATUS[m.status], fmtDate(m.joinedAt)]),
+    ["会員番号", "姓", "名", "セイ", "メイ", "メール", "電話", "生年月日", "プラン", "ステータス", "入会日"],
+    ...members.map((m) => [m.memberNo, m.lastName, m.firstName, m.lastKana, m.firstKana, m.email, m.phone, m.birthDate ? fmtDate(m.birthDate) : "", m.plan?.name, MEMBER_STATUS[m.status], fmtDate(m.joinedAt)]),
   ];
   await audit(me.id, "member.export", undefined, `${members.length}件`);
   const csv = "﻿" + rows.map((r) => r.map(esc).join(",")).join("\r\n");

@@ -44,7 +44,6 @@ export default async function NewSlotPage({ searchParams }: { searchParams: Prom
           <label className="block"><span className="label">時間(分)</span><input className="input" type="number" name="durationMin" min={15} step={15} placeholder="既定値" /></label>
           <label className="block"><span className="label">定員</span><input className="input" type="number" name="capacity" min={1} placeholder="既定値" /></label>
           <label className="block"><span className="label">料金(円)</span><input className="input" type="number" name="price" min={0} placeholder="既定値" /></label>
-          <label className="block"><span className="label">消費チケット</span><input className="input" type="number" name="ticketCost" min={0} placeholder="既定値" /></label>
           <label className="block"><span className="label">担当スタッフ</span>
             <select className="input" name="instructorId" defaultValue="">
               <option value="">なし</option>

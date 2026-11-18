@@ -50,7 +50,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
         <span>{slot.court.name}</span>
         <span>{SLOT_KIND[slot.kind]}</span>
         <span>予約 {activeCount}/{slot.capacity}</span>
-        <span>{yen(slot.price)}・チケット{slot.ticketCost}枚</span>
+        <span>{yen(slot.price)}</span>
         {slot.instructor && <span>担当 {slot.instructor.name}</span>}
         {canceled && <Badge tone="red">中止</Badge>}
       </div>
@@ -97,7 +97,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
               <ul className="divide-y">
                 {candidates.map((m) => (
                   <li key={m.id} className="flex items-center justify-between py-2 text-sm">
-                    <span>{m.lastName} {m.firstName}<span className="ml-2 text-xs text-slate-400">No.{m.memberNo}・{m.plan?.name ?? "プランなし"}・チケット{m.tickets}</span></span>
+                    <span>{m.lastName} {m.firstName}<span className="ml-2 text-xs text-slate-400">No.{m.memberNo}・{m.plan?.name ?? "プランなし"}</span></span>
                     <ActionForm action={addReservation}>
                       <input type="hidden" name="slotId" value={slot.id} />
                       <input type="hidden" name="memberId" value={m.id} />
@@ -125,7 +125,6 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
                 <label className="block"><span className="label">時間(分)</span><input className="input" type="number" name="durationMin" min={15} step={15} defaultValue={duration} /></label>
                 <label className="block"><span className="label">定員</span><input className="input" type="number" name="capacity" min={1} defaultValue={slot.capacity} /></label>
                 <label className="block"><span className="label">料金</span><input className="input" type="number" name="price" min={0} defaultValue={slot.price} /></label>
-                <label className="block"><span className="label">チケット</span><input className="input" type="number" name="ticketCost" min={0} defaultValue={slot.ticketCost} /></label>
               </div>
               <label className="block"><span className="label">担当</span>
                 <select className="input" name="instructorId" defaultValue={slot.instructorId ?? ""}>
@@ -139,7 +138,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
           {!canceled && (
             <div className="card p-4">
               <h2 className="mb-2 font-semibold text-red-700">枠の中止</h2>
-              <p className="mb-3 text-xs text-slate-500">予約はすべてキャンセルされ、消費チケットは返却されます。</p>
+              <p className="mb-3 text-xs text-slate-500">この枠の予約はすべてキャンセルされます。</p>
               <ActionForm action={cancelSlot} confirm="この枠を中止しますか？">
                 <input type="hidden" name="id" value={slot.id} />
                 <Submit className="btn-danger">中止する</Submit>

@@ -11,21 +11,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const setting = await db.setting.findUnique({ where: { id: 1 } });
   const items: NavItem[] = [
     { href: "/dashboard", label: "ダッシュボード" },
-    { href: "/schedule", label: "スケジュール", section: "運営" },
-    { href: "/reservations", label: "予約一覧", section: "運営" },
-    { href: "/members", label: "会員管理", section: "運営" },
-    { href: "/payments", label: "売上・入金", section: "運営" },
+    { href: "/schedule", label: "スケジュール" },
+    { href: "/reservations", label: "予約一覧" },
+    { href: "/members", label: "会員" },
+    { href: "/payments", label: "売上" },
   ];
   if (canManage(me.role)) {
+    if (me.role === "OWNER") items.push({ href: "/settings", label: "施設設定", section: "設定" });
     items.push(
-      { href: "/master/plans", label: "プラン", section: "マスタ" },
-      { href: "/master/programs", label: "プログラム", section: "マスタ" },
-      { href: "/master/courts", label: "コート", section: "マスタ" },
-      { href: "/staff", label: "スタッフ", section: "システム" },
-      { href: "/audit-logs", label: "操作ログ", section: "システム" },
+      { href: "/master/courts", label: "コート", section: "設定" },
+      { href: "/master/programs", label: "プログラム", section: "設定" },
+      { href: "/master/plans", label: "会員プラン", section: "設定" },
+      { href: "/staff", label: "スタッフ", section: "設定" },
+      { href: "/audit-logs", label: "操作ログ", section: "設定" },
     );
   }
-  if (me.role === "OWNER") items.push({ href: "/settings", label: "施設設定", section: "システム" });
 
   return (
     <div className="min-h-screen md:flex">

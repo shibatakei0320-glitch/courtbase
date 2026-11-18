@@ -78,7 +78,6 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               <select className="input" name="method">{Object.entries(PAY_METHOD).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
             </label>
             <label className="block"><span className="label">入金日</span><input className="input" type="date" name="paidAt" defaultValue={today} /></label>
-            {member && <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="grantTickets" defaultChecked />回数券ならチケットを付与</label>}
             <Submit>登録</Submit>
           </ActionForm>
         </div>

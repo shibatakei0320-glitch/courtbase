@@ -14,12 +14,11 @@ export async function savePlan(_: ActionState, fd: FormData): Promise<ActionStat
   const name = str(fd, "name");
   if (!name) return { error: "プラン名を入力してください" };
   const kind = str(fd, "kind") as PlanKind;
-  if (!["MONTHLY", "TICKET", "DROP_IN"].includes(kind)) return { error: "種別が不正です" };
+  if (!["MONTHLY", "DROP_IN"].includes(kind)) return { error: "種別が不正です" };
   const data = {
     name,
     kind,
     price: Math.max(0, int(fd, "price")),
-    ticketCount: kind === "TICKET" ? Math.max(1, int(fd, "ticketCount", 1)) : null,
     description: optStr(fd, "description"),
     active: id ? bool(fd, "active") : true,
     sortOrder: int(fd, "sortOrder"),
@@ -59,7 +58,6 @@ export async function saveProgram(_: ActionState, fd: FormData): Promise<ActionS
     capacity: Math.max(1, int(fd, "capacity", 1)),
     durationMin: Math.max(15, int(fd, "durationMin", 60)),
     price: Math.max(0, int(fd, "price")),
-    ticketCost: Math.max(0, int(fd, "ticketCost")),
     color,
     active: id ? bool(fd, "active") : true,
   };

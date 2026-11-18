@@ -59,7 +59,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       <div className="card overflow-x-auto">
         {members.length === 0 ? <Empty>該当する会員がいません</Empty> : (
           <table className="table">
-            <thead><tr><th>会員番号</th><th>氏名</th><th>メール</th><th>電話</th><th>プラン</th><th>チケット</th><th>ステータス</th><th>入会日</th></tr></thead>
+            <thead><tr><th>会員番号</th><th>氏名</th><th>メール</th><th>電話</th><th>プラン</th><th>ステータス</th><th>入会日</th></tr></thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
@@ -69,7 +69,6 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                   <td>{m.email ?? "-"}</td>
                   <td>{m.phone ?? "-"}</td>
                   <td>{m.plan?.name ?? "-"}</td>
-                  <td>{m.tickets}</td>
                   <td><Badge tone={m.status === "ACTIVE" ? "green" : m.status === "SUSPENDED" ? "yellow" : "gray"}>{MEMBER_STATUS[m.status]}</Badge></td>
                   <td>{fmtDate(m.joinedAt)}</td>
                 </tr>
