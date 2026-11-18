@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { getCurrentStaff } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { login } from "../actions";
 
 export const metadata = { title: "ログイン" };
@@ -9,6 +10,7 @@ export const metadata = { title: "ログイン" };
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reset?: string }> }) {
   const sp = await searchParams;
   if (await getCurrentStaff()) redirect("/dashboard");
+  if (process.env.DATABASE_URL && (await db.staff.count()) === 0) redirect("/setup");
   return (
     <>
       <h1 className="mb-4 text-lg font-bold">ログイン</h1>

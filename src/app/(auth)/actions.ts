@@ -6,6 +6,7 @@ import { hashPassword, validatePassword, verifyPassword } from "@/lib/password";
 import { newToken, sha256 } from "@/lib/tokens";
 import { sendMail } from "@/lib/mail";
 import { audit } from "@/lib/audit";
+import { appUrl } from "@/lib/url";
 import { str, type ActionState } from "@/lib/action";
 
 const MAX_FAILS = 5;
@@ -64,7 +65,7 @@ export async function requestReset(_: ActionState, fd: FormData): Promise<Action
     await db.passwordResetToken.create({
       data: { staffId: staff.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 60 * 60_000) },
     });
-    const url = `${process.env.APP_URL ?? "http://localhost:3000"}/reset-password/${token}`;
+    const url = `${appUrl()}/reset-password/${token}`;
     await sendMail(
       staff.email,
       "【CourtBase】パスワード再設定のご案内",

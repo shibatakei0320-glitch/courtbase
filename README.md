@@ -33,3 +33,12 @@ npm run dev
 
 メール送信は `SMTP_URL` を設定すると有効になります。未設定時はサーバーのコンソールに本文（再設定URL）が出力されます。
 本番では `APP_URL` を公開URLに設定し、HTTPS で運用してください。
+
+## 無料公開（Vercel Hobby + Neon Free）
+1. Vercel で本リポジトリを Import（Project Name: `pickleland` → `https://pickleland.vercel.app`）して Deploy
+2. プロジェクトの **Storage** → **Create Database** → **Neon**（Free）→ 作成して接続（`DATABASE_URL` などが自動設定されます）
+3. **Deployments** → 最新のデプロイの「…」→ **Redeploy**（ビルド時にDBのテーブルが自動作成されます）
+4. `https://pickleland.vercel.app/setup` を開いて最初のオーナーを登録（スタッフが0人の間だけ表示）
+
+- 公開URLは Vercel の本番ドメインが自動で使われます（独自ドメインにする場合は `APP_URL` を設定）
+- パスワード再設定メールを送るには `SMTP_URL` / `MAIL_FROM` を設定（未設定時は Vercel のログに出力）
