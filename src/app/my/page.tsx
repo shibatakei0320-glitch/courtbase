@@ -47,7 +47,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
             <>
               <p className="text-xs text-white/60">{me.firstName}さん</p>
               <p className="mt-4 text-[1.9rem] font-medium leading-[1.35] tracking-wide">次の一戦を、<br />選ぶ。</p>
-              <p className="mt-4 max-w-[15rem] text-sm leading-relaxed text-white/65">募集中の大会・イベントから申し込めます。</p>
+              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">募集中の大会・イベントから申し込めます。</p>
             </>
           )}
         </div>
