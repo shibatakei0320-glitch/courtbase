@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum MemberStatus {
+  ACTIVE
+  SUSPENDED
+  WITHDRAWN
+}
+
+enum PlanKind {
+  MONTHLY
+  TICKET
+  DROP_IN
+}
+
+enum SlotKind {
+  LESSON
+  RENTAL
+  EVENT
+}
+
+enum SlotStatus {
+  OPEN
+  CANCELED
+}
+
+enum ReservationStatus {
+  RESERVED
+  ATTENDED
+  NO_SHOW
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+model Staff {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  passwordHash       String
+  role               Role      @default(STAFF)
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  passwordChangedAt  DateTime  @default(now())
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions    Session[]
+  resetTokens PasswordResetToken[]
+  slots       Slot[]               @relation("Instructor")
+  payments    Payment[]
+  auditLogs   AuditLog[]
+}
+
+model Session {
+  id        String   @id // sha256 of the cookie token
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  staffId   String
+  staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Member {
+  id        String       @id @default(cuid())
+  memberNo  Int          @unique @default(autoincrement())
+  lastName  String
+  firstName String
+  lastKana  String?
+  firstKana String?
+  email     String?      @unique
+  phone     String?
+  birthDate DateTime?
+  gender    String?
+  status    MemberStatus @default(ACTIVE)
+  planId    String?
+  plan      Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  tickets   Int          @default(0)
+  joinedAt  DateTime     @default(now())
+  note      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  reservations Reservation[]
+  payments     Payment[]
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  kind        PlanKind @default(MONTHLY)
+  price       Int
+  ticketCount Int?
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  members  Member[]
+  payments Payment[]
+}
+
+model Court {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  slots Slot[]
+}
+
+model Program {
+  id          String   @id @default(cuid())
+  name        String
+  kind        SlotKind @default(LESSON)
+  description String?
+  capacity    Int      @default(8)
+  durationMin Int      @default(60)
+  price       Int      @default(0)
+  ticketCost  Int      @default(1)
+  color       String   @default("#2563eb")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  slots Slot[]
+}
+
+model Slot {
+  id           String     @id @default(cuid())
+  title        String
+  kind         SlotKind   @default(LESSON)
+  programId    String?
+  program      Program?   @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courtId      String
+  court        Court      @relation(fields: [courtId], references: [id], onDelete: Restrict)
+  instructorId String?
+  instructor   Staff?     @relation("Instructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  startsAt     DateTime
+  endsAt       DateTime
+  capacity     Int
+  price        Int        @default(0)
+  ticketCost   Int        @default(0)
+  status       SlotStatus @default(OPEN)
+  note         String?
+  createdAt    DateTime   @default(now())
+
+  reservations Reservation[]
+
+  @@index([startsAt])
+  @@index([courtId, startsAt])
+}
+
+model Reservation {
+  id          String            @id @default(cuid())
+  slotId      String
+  slot        Slot              @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status      ReservationStatus @default(RESERVED)
+  ticketsUsed Int               @default(0)
+  canceledAt  DateTime?
+  createdAt   DateTime          @default(now())
+
+  @@index([slotId])
+  @@index([memberId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  memberId    String?
+  member      Member?       @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  planId      String?
+  plan        Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  amount      Int
+  method      PaymentMethod @default(CASH)
+  description String
+  paidAt      DateTime      @default(now())
+  staffId     String?
+  staff       Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt   DateTime      @default(now())
+
+  @@index([paidAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  staffId   String?
+  staff     Staff?   @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Setting {
+  id                  Int     @id @default(1)
+  facilityName        String  @default("CourtBase")
+  openHour            Int     @default(7)
+  closeHour           Int     @default(23)
+  cancelDeadlineHours Int     @default(24)
+  sessionHours        Int     @default(12)
+  contactEmail        String?
+}
