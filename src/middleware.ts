@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/setup", "/login", "/forgot-password", "/reset-password"];
+const PUBLIC = ["/setup", "/login", "/forgot-password", "/reset-password", "/my", "/api/line", "/api/stripe"];
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isPublic = pathname === "/" || PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
   if (!isPublic && !req.cookies.has("cb_session")) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";

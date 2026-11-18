@@ -32,7 +32,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="会員番号" value={String(member.memberNo).padStart(6, "0")} />
-        <Stat label="ステータス" value={<Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>} />
+        <Stat label="ステータス" value={<span className="flex gap-1"><Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>{member.lineUserId && <Badge tone="blue">LINE連携</Badge>}</span>} />
         <Stat label="累計入金" value={yen(total)} />
       </div>
       <div>
