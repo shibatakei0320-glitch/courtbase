@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/member-auth";
-import { Ball, CourtLines } from "../ui";
+import { Court } from "../ui";
 
 export const metadata = { title: "ログイン" };
 
@@ -15,16 +15,15 @@ export default async function MemberLogin({ searchParams }: { searchParams: Prom
   if (await getCurrentMember()) redirect("/my");
   const { error } = await searchParams;
   return (
-    <section className="relative overflow-hidden rounded-[2rem] bg-[#1E47B8] px-6 pb-8 pt-10 text-white">
-      <CourtLines />
+    <section className="relative flex min-h-[70vh] flex-col justify-end overflow-hidden rounded-2xl bg-[#0F3D2E] px-6 pb-8 pt-40 text-white">
+      <Court className="-right-6 -top-10 h-[30rem] rotate-[-8deg]" />
       <div className="relative">
-        <Ball size={72} className="pl-bounce" />
-        <h1 className="mt-6 font-display text-[2.4rem] leading-[1.2]">コートで<br />会いましょう</h1>
-        <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/85">
-          大会・イベントの申込みは、LINEアカウントでログインして行います。はじめての方は、ログインのあとに会員登録へ進みます。
+        <h1 className="text-[2rem] font-medium leading-[1.35] tracking-wide">今週も、<br />コートで。</h1>
+        <p className="mt-4 max-w-[18rem] text-sm leading-relaxed text-white/65">
+          大会・イベントの申込みはLINEでログインして行います。はじめての方は、そのまま会員登録へ進みます。
         </p>
-        {error && ERRORS[error] && <p role="alert" className="mt-5 rounded-2xl bg-white px-4 py-3 text-sm font-medium text-rose-700">{ERRORS[error]}</p>}
-        <a href="/api/line/login" className="mt-8 flex w-full items-center justify-center rounded-full bg-[#06C755] py-4 text-base font-bold text-white shadow-[0_10px_24px_-12px_rgba(0,0,0,0.6)] transition hover:bg-[#05b34c] active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+        {error && ERRORS[error] && <p role="alert" className="mt-5 border-l-2 border-[#E4F25C] pl-3 text-sm text-white">{ERRORS[error]}</p>}
+        <a href="/api/line/login" className="mt-8 flex w-full items-center justify-center rounded-xl bg-[#06C755] py-4 text-sm font-bold text-white transition hover:bg-[#05b34c] active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
           LINEでログイン
         </a>
       </div>
