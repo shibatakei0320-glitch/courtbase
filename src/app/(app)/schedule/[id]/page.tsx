@@ -272,16 +272,17 @@ function CategoryManager({ slotId, cats, countBy, publicEntries }: { slotId: str
       {cats.length === 0 ? (
         <p className="px-4 py-4 text-sm text-slate-500">種目を追加すると、会員は種目を選んでエントリーします（種目ごとに定員と参加費を設定）。種目がない場合は、枠の定員・料金で申込みを受け付けます。</p>
       ) : (
+        <div className="overflow-x-auto">
         <table className="table">
-          <thead><tr><th>種目</th><th>形式</th><th>エントリー</th><th>参加費</th><th></th></tr></thead>
+          <thead><tr><th>種目</th><th>形式</th><th className="whitespace-nowrap">組数</th><th className="whitespace-nowrap">参加費</th><th></th></tr></thead>
           <tbody>
             {cats.map((c) => (
               <tr key={c.id}>
                 <td className="font-medium">{categoryLabel(c)}</td>
                 <td>{FORMAT_LABEL[c.format]}{c.format === "TEAM" && <span className="text-xs text-slate-500">（{entrySize(c)}名）</span>}</td>
-                <td>{countBy(c.id)} / {c.capacity}組</td>
-                <td>{c.price > 0 ? yen(c.price) : "無料"}</td>
-                <td>
+                <td className="whitespace-nowrap">{countBy(c.id)} / {c.capacity}組</td>
+                <td className="whitespace-nowrap">{c.price > 0 ? yen(c.price) : "無料"}</td>
+                <td className="whitespace-nowrap">
                   <details className="relative">
                     <summary className="cursor-pointer text-brand-700">編集</summary>
                     <div className="absolute right-0 z-10 mt-2 w-80 rounded-lg border bg-white p-4 shadow-lg">
@@ -297,6 +298,7 @@ function CategoryManager({ slotId, cats, countBy, publicEntries }: { slotId: str
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <details className="border-t px-4 py-3">
         <summary className="cursor-pointer text-sm font-semibold text-brand-700">＋ 種目を追加</summary>
