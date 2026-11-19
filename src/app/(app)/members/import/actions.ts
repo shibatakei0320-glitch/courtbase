@@ -26,7 +26,7 @@ function parseDate(v?: string): Date | null {
 
 function parseStatus(v?: string): MemberStatus {
   const s = t(v);
-  if (/退会|解約|退所|withdraw/i.test(s)) return "WITHDRAWN";
+  if (/退会|解約|退所|無効|withdraw|inactive/i.test(s)) return "WITHDRAWN";
   if (/休会|休止|停止|suspend/i.test(s)) return "SUSPENDED";
   return "ACTIVE";
 }

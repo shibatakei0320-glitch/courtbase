@@ -29,6 +29,9 @@ function parseCsv(text: string): string[][] {
 /** 見出しから取り込み先を推測 */
 function guess(header: string): Target {
   const h = header.replace(/[\s　（）()\[\]【】・_\-]/g, "").toLowerCase();
+  // hacomono のメンバーグループ代表者・確認系・年齢などの列は取り込まない
+  if (/^代表|確認|マガジン|年齢|ダミー|担当者|チェックイン|同意日時|ロック|不達/.test(h)) return "";
+  if (/^会員番号$/.test(h)) return "note";
   if (/(会員|メンバー|顧客|member|customer)(id|番号|no|コード)/.test(h)) return "externalId";
   if (/^(セイ|姓カナ|姓フリガナ|フリガナ姓|せい|姓ふりがな)$/.test(h) || /^(姓|氏)(カナ|フリガナ)/.test(h)) return "lastKana";
   if (/^(メイ|名カナ|名フリガナ|フリガナ名|めい|名ふりがな)$/.test(h)) return "firstKana";
@@ -42,7 +45,7 @@ function guess(header: string): Target {
   if (/性別|gender|sex/.test(h)) return "gender";
   if (/ステータス|状態|在籍|status/.test(h)) return "status";
   if (/入会日|入会年月日|登録日|joined/.test(h)) return "joinedAt";
-  if (/住所|郵便|プラン|契約|備考|メモ|コース|所属|レベル/.test(h)) return "note";
+  if (/住所|郵便|都道府県|プラン|契約|備考|メモ|コース|所属|レベル|メンバータイプ|グループ/.test(h)) return "note";
   return "";
 }
 
