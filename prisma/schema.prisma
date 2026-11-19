@@ -256,6 +256,7 @@ model Setting {
   cancelDeadlineHours Int     @default(24)
   sessionHours        Int     @default(12)
   contactEmail        String?
+  facilityMode        Boolean @default(false) // 施設の予約・入退場（QR）を使う
   // 特定商取引法に基づく表記
   legalSeller         String?
   legalManager        String?

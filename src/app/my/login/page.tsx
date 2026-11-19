@@ -20,7 +20,7 @@ export default async function MemberLogin({ searchParams }: { searchParams: Prom
       <div className="relative">
         <h1 className="text-[2rem] font-medium leading-[1.35] tracking-wide">今週も、<br />コートで。</h1>
         <p className="mt-4 max-w-[18rem] text-sm leading-relaxed text-white/65">
-          コートの予約や大会・イベントの申込みは、LINEでログインして行います。はじめての方は、そのまま会員登録へ進みます。
+          大会・イベントの申込みや予約は、LINEでログインして行います。はじめての方は、そのまま会員登録へ進みます。
         </p>
         {error && ERRORS[error] && <p role="alert" className="mt-5 border-l-2 border-[#E4F25C] pl-3 text-sm text-white">{ERRORS[error]}</p>}
         <a href="/api/line/login" className="mt-8 flex w-full items-center justify-center rounded-xl bg-[#06C755] py-4 text-sm font-bold text-white transition hover:bg-[#05b34c] active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">

@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
-import { db } from "@/lib/db";
+import { db, facilityModeOn } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { addDays, fromJst, jstDateKey, yen } from "@/lib/format";
@@ -14,6 +15,7 @@ const DAYS = 14;
 
 export default async function CourtBooking({ searchParams }: { searchParams: Promise<{ date?: string; court?: string; start?: string }> }) {
   await requireMember();
+  if (!(await facilityModeOn())) redirect("/my");
   const sp = await searchParams;
   const today = jstDateKey(new Date());
   const dates = Array.from({ length: DAYS }, (_, i) => addDays(today, i));

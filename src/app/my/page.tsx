@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db } from "@/lib/db";
+import { db, facilityModeOn } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import type { SlotKind } from "@prisma/client";
 import { yen } from "@/lib/format";
@@ -20,6 +20,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
   const sp = await searchParams;
   const kind = KINDS.some((k) => k.key === sp.kind && k.key !== "ALL") ? (sp.kind as SlotKind) : null;
   const now = new Date();
+  const facility = await facilityModeOn();
   const [mine, events] = await Promise.all([
     db.reservation.findMany({
       where: { memberId: me.id, status: "RESERVED", slot: { endsAt: { gte: now } } },
@@ -59,13 +60,13 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
             <>
               <p className="text-xs text-white/60">{me.firstName}さん</p>
               <p className="mt-4 text-[1.9rem] font-medium leading-[1.35] tracking-wide">コートに立つ日を、<br />選ぶ。</p>
-              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">コートの利用、レッスン、大会・イベントをここから予約できます。</p>
+              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">{facility ? "コートの利用、レッスン、大会・イベントをここから予約できます。" : "大会・イベントの申込みは、ここからできます。"}</p>
             </>
           )}
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3">
+      {facility && <div className="grid grid-cols-2 gap-3">
         <Link href="/my/court" className="rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
           <span className="block text-sm font-bold">コートを予約</span>
           <span className="mt-1 block text-xs text-[#13201A]/50">時間を選んで予約</span>
@@ -74,7 +75,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
           <span className="block text-sm font-bold">会員証</span>
           <span className="mt-1 block text-xs text-[#13201A]/50">入退場用QRコード</span>
         </Link>
-      </div>
+      </div>}
       </div>
 
       {sp.paid && <Notice>お支払いが完了しました。予約の反映まで数秒かかることがあります。表示されないときはページを再読み込みしてください。</Notice>}
@@ -109,7 +110,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
           {events.length > 0 && <span className="font-display text-sm text-[#13201A]/50">{events.length}件</span>}
         </div>
         <nav className="mb-2 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="種類で絞り込む">
-          {KINDS.map((k) => {
+          {KINDS.filter((k) => facility || k.key !== "RENTAL").map((k) => {
             const active = (kind ?? "ALL") === k.key;
             return (
               <Link

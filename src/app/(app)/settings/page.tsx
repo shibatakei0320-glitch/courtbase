@@ -10,12 +10,19 @@ export const metadata = { title: "施設設定" };
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />
       <div className="card max-w-2xl p-6">
         <ActionForm action={saveSettings} className="grid gap-4 sm:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+            <input type="checkbox" name="facilityMode" defaultChecked={s.facilityMode} className="mt-1 h-4 w-4" />
+            <span>
+              <span className="block text-sm font-semibold">施設の予約・入退場（QR）を使う</span>
+              <span className="mt-1 block text-xs text-slate-500">オンにすると、会員ページに「コートを予約」「会員証（QRコード）」が、管理画面に「入退場（QR）」が表示されます。施設がない間はオフにしておくと、会員ページは大会・イベントなどの申込みだけになります。</span>
+            </span>
+          </label>
           <label className="block sm:col-span-2"><span className="label">施設名</span><input className="input" name="facilityName" defaultValue={s.facilityName} /></label>
           <label className="block"><span className="label">営業開始(時)</span><input className="input" type="number" name="openHour" min={0} max={23} defaultValue={s.openHour} /></label>
           <label className="block"><span className="label">営業終了(時)</span><input className="input" type="number" name="closeHour" min={1} max={24} defaultValue={s.closeHour} /></label>

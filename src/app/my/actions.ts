@@ -1,7 +1,7 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { db, facilityModeOn } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { int, str, optStr, type ActionState } from "@/lib/action";
 import { BookingError, book, cancelDeadline, cancelReservation } from "@/lib/booking";
@@ -122,6 +122,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
 export async function bookCourt(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
   if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。施設スタッフにお問い合わせください" };
+  if (!(await facilityModeOn())) return { error: "コートの予約は現在受け付けていません" };
   const courtId = str(fd, "courtId");
   const date = str(fd, "date");
   const start = str(fd, "start");

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { int, optStr, str, type ActionState } from "@/lib/action";
+import { bool, int, optStr, str, type ActionState } from "@/lib/action";
 
 export async function saveSettings(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff(["OWNER"]);
@@ -14,6 +14,7 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     cancelDeadlineHours: Math.max(0, int(fd, "cancelDeadlineHours", 24)),
     sessionHours: Math.min(720, Math.max(1, int(fd, "sessionHours", 12))),
     contactEmail: optStr(fd, "contactEmail"),
+    facilityMode: bool(fd, "facilityMode"),
     legalSeller: optStr(fd, "legalSeller"),
     legalManager: optStr(fd, "legalManager"),
     legalAddress: optStr(fd, "legalAddress"),

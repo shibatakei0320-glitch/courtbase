@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, facilityModeOn } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { fmtTime, fromJst, jstDateKey } from "@/lib/format";
 import { Scanner } from "./Scanner";
 
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CheckinPage() {
   await requireStaff();
+  if (!(await facilityModeOn())) redirect("/dashboard");
   const visits = await db.visit.findMany({
     where: { checkInAt: { gte: fromJst(jstDateKey(new Date())) } },
     include: { member: true },

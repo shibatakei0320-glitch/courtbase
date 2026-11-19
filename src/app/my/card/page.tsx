@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { facilityModeOn } from "@/lib/db";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { requireMember } from "@/lib/member-auth";
@@ -7,6 +9,7 @@ export const metadata = { title: "会員証" };
 
 export default async function MemberCard() {
   const me = await requireMember();
+  if (!(await facilityModeOn())) redirect("/my");
   const svg = await QRCode.toString(memberQrValue(me.id), { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#13201A", light: "#FFFFFF" } });
   return (
     <div className="space-y-6 pt-2">

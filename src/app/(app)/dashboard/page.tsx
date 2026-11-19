@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, facilityModeOn } from "@/lib/db";
 import { addDays, fmtTime, fromJst, jstDateKey, yen } from "@/lib/format";
 
 export const metadata = { title: "ダッシュボード" };
@@ -12,6 +12,7 @@ export default async function Dashboard() {
   const start = fromJst(today);
   const end = fromJst(addDays(today, 1));
   const monthStart = fromJst(today.slice(0, 8) + "01");
+  const facility = await facilityModeOn();
   const [slots, activeMembers, inside, monthSales, todaySales, todayRes] = await Promise.all([
     db.slot.findMany({
       where: { startsAt: { gte: start, lt: end }, status: "OPEN" },
@@ -29,10 +30,10 @@ export default async function Dashboard() {
     <>
       <PageHeader
         title="今日の状況"
-        actions={<><Link href="/checkin" className="btn-primary">QRで入退場を受付</Link><Link href="/schedule/new" className="btn-secondary">枠を作成</Link></>}
+        actions={<>{facility && <Link href="/checkin" className="btn-primary">QRで入退場を受付</Link>}<Link href="/schedule/new" className={facility ? "btn-secondary" : "btn-primary"}>枠を作成</Link></>}
       />
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Kpi label="いま在館中" value={`${inside}名`} />
+      <div className={`mb-6 grid gap-4 sm:grid-cols-2 ${facility ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+        {facility && <Kpi label="いま在館中" value={`${inside}名`} />}
         <Kpi label="本日の予約" value={`${todayRes} / ${capacity}`} sub={capacity ? `稼働率 ${Math.round((todayRes / capacity) * 100)}%` : "枠なし"} />
         <Kpi label="本日の売上" value={yen(todaySales._sum.amount ?? 0)} />
         <Kpi label="今月の売上" value={yen(monthSales._sum.amount ?? 0)} />
