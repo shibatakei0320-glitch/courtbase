@@ -34,6 +34,16 @@ export async function registerMember(_: ActionState, fd: FormData): Promise<Acti
 
   let member = await db.member.findUnique({ where: { lineUserId: pending.sub } });
   if (!member) {
+    // 移行・スタッフ登録済みの会員（LINE未連携）で、氏名と電話番号が一致すればその会員につなぐ
+    const d = (v: string | null) => (v ?? "").replace(/\D/g, "");
+    const cands = await db.member.findMany({ where: { lineUserId: null, lastName, firstName, status: { not: "WITHDRAWN" } }, take: 20 });
+    const match = cands.find((c) => d(c.phone) && d(c.phone) === d(phone));
+    if (match) {
+      member = await db.member.update({ where: { id: match.id }, data: { lineUserId: pending.sub, ...(email && !match.email && !(await db.member.findUnique({ where: { email } })) ? { email } : {}) } });
+      await audit(null, "member.line_link", member.id, `${lastName} ${firstName}`);
+    }
+  }
+  if (!member) {
     if (email && (await db.member.findUnique({ where: { email } })))
       return { error: "このメールアドレスは既に登録されています。施設スタッフにお問い合わせください" };
     member = await db.member.create({

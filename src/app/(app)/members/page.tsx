@@ -37,6 +37,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader title="会員管理" actions={<>
+        <a href="/members/import" className="btn-secondary">CSV取り込み</a>
         <a href={`/members/export?${qs}`} className="btn-secondary">CSV出力</a>
         <Link href="/members/new" className="btn-primary">＋ 新規会員登録</Link>
       </>} />

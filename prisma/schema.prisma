@@ -111,6 +111,7 @@ model Member {
   joinedAt  DateTime     @default(now())
   note      String?
   lineUserId String?     @unique
+  externalId String?     @unique // 移行元（hacomono 等）の会員ID
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
