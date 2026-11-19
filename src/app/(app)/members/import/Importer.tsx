@@ -30,7 +30,7 @@ function parseCsv(text: string): string[][] {
 function guess(header: string): Target {
   const h = header.replace(/[\s　（）()\[\]【】・_\-]/g, "").toLowerCase();
   // hacomono のメンバーグループ代表者・確認系・年齢などの列は取り込まない
-  if (/^代表|確認|マガジン|年齢|ダミー|担当者|チェックイン|同意日時|ロック|不達/.test(h)) return "";
+  if (/^代表|^緊急連絡先|確認|マガジン|年齢|ダミー|担当者|チェックイン|同意日時|ロック|不達|契約の有無|累計|決済エラー|メンバータイプ|メンバーグループ|店舗コード/.test(h)) return "";
   if (/^会員番号$/.test(h)) return "note";
   if (/(会員|メンバー|顧客|member|customer)(id|番号|no|コード)/.test(h)) return "externalId";
   if (/^(セイ|姓カナ|姓フリガナ|フリガナ姓|せい|姓ふりがな)$/.test(h) || /^(姓|氏)(カナ|フリガナ)/.test(h)) return "lastKana";
@@ -87,7 +87,7 @@ export function Importer() {
     const notes: string[] = [];
     map.forEach((f, i) => {
       const v = (r[i] ?? "").trim();
-      if (!f || !v) return;
+      if (!f || !v || /^[-－ー―]$/.test(v)) return;
       if (f === "note") notes.push(`${header[i]}: ${v}`);
       else if (!o[f]) o[f] = v;
     });
