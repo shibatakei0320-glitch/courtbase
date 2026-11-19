@@ -4,8 +4,8 @@ import { ActionForm, Submit } from "@/components/ActionForm";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { canManage, requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { RES_STATUS, SLOT_KIND, fmtDateTime, fmtTime, jstDateKey, yen } from "@/lib/format";
-import { addReservation, cancelSlot, deleteCategory, deleteSlot, saveCategory, sendEventMessage, setPublicEntries, setReservationStatus, updateSlot } from "../actions";
+import { RES_STATUS, SLOT_KIND, fmtDate, fmtDateTime, fmtTime, jstDateKey, yen } from "@/lib/format";
+import { addReservation, cancelSlot, deleteCategory, deleteSlot, saveCategory, sendEntryMessage, sendEventMessage, setPublicEntries, setReservationStatus, updateSlot } from "../actions";
 import { FORMAT_LABEL, categoryLabel, entryName, entrySize } from "@/lib/entry";
 import { lineMessagingConfigured } from "@/lib/line-message";
 import type { EventCategory } from "@prisma/client";
@@ -25,7 +25,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
       program: true,
       instructor: true,
       reservations: { include: { member: { include: { plan: true } }, category: true }, orderBy: { createdAt: "asc" } },
-      categories: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+      categories: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], include: { _count: { select: { waitlist: true } } } },
       messages: { orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
@@ -77,6 +77,12 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {isEvent && <CategoryManager slotId={slot.id} cats={cats} countBy={countBy} publicEntries={slot.publicEntries} />}
+          {isEvent && cats.length > 0 && (
+            <Link href={`/schedule/${slot.id}/draw`} className="card flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+              <span className="font-semibold">対戦表・試合結果</span>
+              <span className="text-sm text-brand-700">開く →</span>
+            </Link>
+          )}
 
           <div className="card overflow-x-auto">
             <div className="flex items-center justify-between border-b px-4 py-3">
@@ -105,6 +111,19 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
                             {r.status !== "NO_SHOW" && <StatusBtn id={r.id} status="NO_SHOW" label="欠席" />}
                             {r.status !== "RESERVED" && <StatusBtn id={r.id} status="RESERVED" label="予約中に戻す" />}
                             <StatusBtn id={r.id} status="CANCELED" label="取消" danger />
+                            {isEvent && r.member.lineUserId && (
+                              <details className="relative">
+                                <summary className="btn-secondary btn-sm cursor-pointer list-none">LINE</summary>
+                                <div className="absolute right-0 z-10 mt-2 w-72 rounded-lg border bg-white p-3 shadow-lg">
+                                  <ActionForm action={sendEntryMessage} confirm="LINEで送信しますか？" className="space-y-2" resetOnSuccess>
+                                    <input type="hidden" name="reservationId" value={r.id} />
+                                    <p className="text-xs text-slate-500">{r.member.lastName} {r.member.firstName}さんのLINEに送ります</p>
+                                    <textarea className="input" name="body" rows={4} required maxLength={2000} />
+                                    <Submit className="btn-primary btn-sm">送信</Submit>
+                                  </ActionForm>
+                                </div>
+                              </details>
+                            )}
                           </div>
                         )}
                       </td>
@@ -257,7 +276,9 @@ function StatusBtn({ id, status, label, danger }: { id: string; status: string; 
   );
 }
 
-function CategoryManager({ slotId, cats, countBy, publicEntries }: { slotId: string; cats: EventCategory[]; countBy: (id: string) => number; publicEntries: boolean }) {
+type CatRow = EventCategory & { _count: { waitlist: number } };
+
+function CategoryManager({ slotId, cats, countBy, publicEntries }: { slotId: string; cats: CatRow[]; countBy: (id: string) => number; publicEntries: boolean }) {
   return (
     <div className="card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
@@ -280,8 +301,8 @@ function CategoryManager({ slotId, cats, countBy, publicEntries }: { slotId: str
               <tr key={c.id}>
                 <td className="font-medium">{categoryLabel(c)}</td>
                 <td>{FORMAT_LABEL[c.format]}{c.format === "TEAM" && <span className="text-xs text-slate-500">（{entrySize(c)}名）</span>}</td>
-                <td className="whitespace-nowrap">{countBy(c.id)} / {c.capacity}組</td>
-                <td className="whitespace-nowrap">{c.price > 0 ? yen(c.price) : "無料"}</td>
+                <td className="whitespace-nowrap">{countBy(c.id)} / {c.capacity}組{c._count.waitlist > 0 && <span className="block text-xs text-amber-700">キャンセル待ち {c._count.waitlist}名</span>}</td>
+                <td className="whitespace-nowrap">{c.price > 0 ? yen(c.price) : "無料"}{c.earlyPrice != null && c.earlyUntil && <span className="block text-xs text-slate-500">早期 {yen(c.earlyPrice)}（〜{fmtDate(c.earlyUntil)}）</span>}</td>
                 <td className="whitespace-nowrap">
                   <details className="relative">
                     <summary className="cursor-pointer text-brand-700">編集</summary>
@@ -323,6 +344,8 @@ function CategoryForm({ slotId, c }: { slotId: string; c?: EventCategory }) {
         <label className="block"><span className="label">レベル</span><input className="input" name="level" defaultValue={c?.level ?? ""} placeholder="例：初級、DUPR 3.0〜3.5" /></label>
         <label className="block"><span className="label">定員（組）</span><input className="input" type="number" name="capacity" min={1} defaultValue={c?.capacity ?? 16} /></label>
         <label className="block"><span className="label">参加費（1組）</span><input className="input" type="number" name="price" min={0} step={100} defaultValue={c?.price ?? 0} /></label>
+        <label className="block"><span className="label">早期料金（任意）</span><input className="input" type="number" name="earlyPrice" min={0} step={100} defaultValue={c?.earlyPrice ?? ""} /></label>
+        <label className="block"><span className="label">早期割引の締切日</span><input className="input" type="date" name="earlyUntil" defaultValue={c?.earlyUntil ? jstDateKey(c.earlyUntil) : ""} /></label>
         <label className="block"><span className="label">団体戦の人数</span><input className="input" type="number" name="teamSize" min={2} max={20} defaultValue={c?.teamSize ?? 4} /></label>
         <label className="block"><span className="label">表示順</span><input className="input" type="number" name="sortOrder" defaultValue={c?.sortOrder ?? 0} /></label>
       </div>

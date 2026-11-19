@@ -14,7 +14,7 @@ export default async function MemberLayout({ children }: { children: React.React
   const [setting, me] = await Promise.all([db.setting.findUnique({ where: { id: 1 } }), getCurrentMember()]);
   return (
     <div className={`${body.className} ${num.variable} min-h-screen bg-[#F2F3F0] text-[#13201A] antialiased`}>
-      <header className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 pb-3 pt-5">
+      <header className="mx-auto flex max-w-xl print:hidden items-center justify-between gap-3 px-5 pb-3 pt-5">
         <Link href="/my" className="font-display text-xl font-semibold tracking-[0.04em] text-[#0F3D2E]">{setting?.facilityName ?? "pickleland"}</Link>
         {me && (
           <form action={memberLogout} className="flex items-center gap-4 text-xs">
@@ -24,7 +24,7 @@ export default async function MemberLayout({ children }: { children: React.React
         )}
       </header>
       <main className="mx-auto max-w-xl px-4 pb-8">{children}</main>
-      <footer className="mx-auto flex max-w-xl flex-wrap gap-x-5 gap-y-2 px-5 pb-32 pt-4 text-xs text-[#13201A]/45">
+      <footer className="mx-auto flex max-w-xl print:hidden flex-wrap gap-x-5 gap-y-2 px-5 pb-32 pt-4 text-xs text-[#13201A]/45">
         <Link href="/my/legal/terms" className="hover:text-[#13201A]">利用規約</Link>
         <Link href="/my/legal/privacy" className="hover:text-[#13201A]">プライバシーポリシー</Link>
         <Link href="/my/legal/tokushoho" className="hover:text-[#13201A]">特定商取引法に基づく表記</Link>

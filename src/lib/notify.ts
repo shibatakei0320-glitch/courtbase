@@ -50,3 +50,26 @@ export async function notifyReminder(reservationId: string) {
     `【${x.name}】明日のご予約のお知らせです\n\n${body(x.r)}\n\n会員証（入退場用QRコード）\n${appUrl()}/my/card`,
   );
 }
+
+/** 種目に空きが出たとき、キャンセル待ちの全員に先着順の案内を送る */
+export async function notifyWaitlist(categoryId: string) {
+  const cat = await db.eventCategory.findUnique({ where: { id: categoryId }, include: { slot: true } });
+  if (!cat || cat.slot.status !== "OPEN" || cat.slot.startsAt <= new Date()) return 0;
+  const taken = await db.reservation.count({ where: { categoryId, status: { in: ["RESERVED", "ATTENDED"] } } });
+  if (taken >= cat.capacity) return 0;
+  const list = await db.waitlist.findMany({ where: { categoryId }, include: { member: true }, orderBy: { createdAt: "asc" } });
+  if (!list.length) return 0;
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  const name = s?.facilityName ?? "pickleland";
+  const label = cat.level ? `${cat.name}（${cat.level}）` : cat.name;
+  let sent = 0;
+  for (const w of list) {
+    const ok = await pushLine(
+      w.member.lineUserId,
+      `【${name}】キャンセル待ちの種目に空きが出ました\n\n${cat.slot.title}\n${label}\n\nエントリーは先着順です。ご希望の方はお早めにお申し込みください。\n${appUrl()}/my/events/${cat.slotId}`,
+    );
+    if (ok) sent++;
+  }
+  await db.waitlist.updateMany({ where: { categoryId }, data: { notifiedAt: new Date() } });
+  return sent;
+}

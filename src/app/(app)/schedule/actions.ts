@@ -10,10 +10,11 @@ import { bool, int, optStr, str, type ActionState } from "@/lib/action";
 import type { EntryFormat } from "@prisma/client";
 import { entrySize } from "@/lib/entry";
 import { pushLine, lineMessagingConfigured } from "@/lib/line-message";
-import { fromJst, yen } from "@/lib/format";
+import { addDays, fromJst, yen } from "@/lib/format";
+import { knockout, league, shuffle } from "@/lib/draw";
 import { refundReservation } from "@/lib/refund";
 import { clearExpiredHolds } from "@/lib/court-booking";
-import { notifyBooked, notifyCanceled } from "@/lib/notify";
+import { notifyBooked, notifyCanceled, notifyWaitlist } from "@/lib/notify";
 
 async function overlaps(courtId: string, start: Date, end: Date, excludeId?: string) {
   await clearExpiredHolds(courtId);
@@ -142,9 +143,10 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   let msg = "更新しました";
   try {
     if (status === "CANCELED") {
-      await cancelReservation(id);
+      const canceled = await cancelReservation(id);
       const amt = await refundReservation(id, "スタッフによる取消");
       await notifyCanceled(id, amt);
+      if (canceled.categoryId) await notifyWaitlist(canceled.categoryId);
       msg = amt > 0 ? `キャンセルし、${yen(amt)}を返金しました` : "キャンセルしました";
     } else if (["RESERVED", "ATTENDED", "NO_SHOW"].includes(status)) {
       const r = await db.reservation.findUniqueOrThrow({ where: { id } });
@@ -186,8 +188,11 @@ export async function saveCategory(_: ActionState, fd: FormData): Promise<Action
     teamSize: Math.min(20, Math.max(2, int(fd, "teamSize", 4))),
     capacity: Math.max(1, int(fd, "capacity", 16)),
     price: Math.max(0, int(fd, "price")),
+    earlyPrice: str(fd, "earlyPrice") === "" ? null : Math.max(0, int(fd, "earlyPrice")),
+    earlyUntil: /^\d{4}-\d{2}-\d{2}$/.test(str(fd, "earlyUntil")) ? new Date(fromJst(addDays(str(fd, "earlyUntil"), 1)).getTime() - 1) : null,
     sortOrder: int(fd, "sortOrder"),
   };
+  if ((data.earlyPrice == null) !== (data.earlyUntil == null)) return { error: "早期割引は「早期料金」と「締切日」の両方を入力してください" };
   if (id) {
     const used = await db.reservation.count({ where: { categoryId: id, status: { in: ["RESERVED", "ATTENDED"] } } });
     const cur = await db.eventCategory.findUnique({ where: { id } });
@@ -195,6 +200,7 @@ export async function saveCategory(_: ActionState, fd: FormData): Promise<Action
     if (used > data.capacity) return { error: `すでに${used}組がエントリーしています。定員はそれ以上にしてください` };
     await db.eventCategory.update({ where: { id }, data });
     await audit(me.id, "category.update", id, name);
+    if (cur && data.capacity > cur.capacity) await notifyWaitlist(id);
   } else {
     const c = await db.eventCategory.create({ data: { ...data, slotId } });
     await audit(me.id, "category.create", c.id, name);
@@ -253,4 +259,115 @@ export async function sendEventMessage(_: ActionState, fd: FormData): Promise<Ac
   revalidatePath(`/schedule/${slotId}`);
   const missed = members.size - sent;
   return { ok: `${sent}名に送信しました${missed ? `（LINE未連携などで${missed}名には届いていません）` : ""}` };
+}
+
+/** エントリー1組（代表者）へ個別にLINEで連絡 */
+export async function sendEntryMessage(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const id = str(fd, "reservationId");
+  const body = str(fd, "body");
+  if (!body) return { error: "本文を入力してください" };
+  if (!lineMessagingConfigured()) return { error: "LINE公式アカウントの設定がまだのため送信できません" };
+  const r = await db.reservation.findUnique({ where: { id }, include: { member: true, slot: true } });
+  if (!r) return { error: "エントリーが見つかりません" };
+  if (!r.member.lineUserId) return { error: "この会員はLINE未連携のため送信できません" };
+  const setting = await db.setting.findUnique({ where: { id: 1 } });
+  const ok = await pushLine(r.member.lineUserId, `【${setting?.facilityName ?? "pickleland"}】${r.slot.title}\n\n${body}`);
+  if (!ok) return { error: "送信できませんでした（友だち追加されていない可能性があります）" };
+  await db.eventMessage.create({ data: { slotId: r.slotId, categoryId: r.categoryId, body: `［個別：${r.member.lastName} ${r.member.firstName}］${body}`, sentCount: 1, totalCount: 1, staffId: me.id } });
+  await audit(me.id, "event.message_one", id);
+  revalidatePath(`/schedule/${r.slotId}`);
+  return { ok: `${r.member.lastName} ${r.member.firstName}さんに送信しました` };
+}
+
+// ---- 対戦表 ----
+
+export async function generateDraw(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const categoryId = str(fd, "categoryId");
+  const type = str(fd, "type");
+  const cat = await db.eventCategory.findUnique({ where: { id: categoryId } });
+  if (!cat) return { error: "種目が見つかりません" };
+  const entries = await db.reservation.findMany({ where: { categoryId, status: { in: ["RESERVED", "ATTENDED"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  if (entries.length < 2) return { error: "対戦表を作るには2組以上のエントリーが必要です" };
+  const ids = str(fd, "order") === "random" ? shuffle(entries.map((e) => e.id)) : entries.map((e) => e.id);
+  const plan = type === "KNOCKOUT" ? knockout(ids) : league(ids, Math.max(1, int(fd, "groups", 1)));
+  await db.$transaction(async (tx) => {
+    await tx.match.deleteMany({ where: { categoryId } });
+    const idByKey = new Map<string, string>();
+    // 後ろの回戦から作り、nextMatchId を確定させる
+    for (const m of [...plan].sort((a, b) => b.round - a.round)) {
+      const row = await tx.match.create({
+        data: {
+          categoryId,
+          stage: m.stage,
+          groupName: m.groupName,
+          round: m.round,
+          position: m.position,
+          entryAId: m.entryAId,
+          entryBId: m.entryBId,
+          winnerId: m.winnerId ?? null,
+          score: m.winnerId ? "不戦勝" : null,
+          nextMatchId: m.nextKey ? idByKey.get(m.nextKey) ?? null : null,
+          nextSlot: m.nextSlot ?? null,
+        },
+      });
+      idByKey.set(m.key, row.id);
+    }
+  });
+  await audit(me.id, "draw.generate", categoryId, `${type} ${entries.length}組`);
+  revalidatePath(`/schedule/${cat.slotId}/draw`);
+  return { ok: `対戦表を作成しました（${plan.length}試合）` };
+}
+
+export async function clearDraw(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const categoryId = str(fd, "categoryId");
+  const cat = await db.eventCategory.findUnique({ where: { id: categoryId } });
+  if (!cat) return { error: "種目が見つかりません" };
+  await db.match.deleteMany({ where: { categoryId } });
+  await db.eventCategory.update({ where: { id: categoryId }, data: { drawPublished: false } });
+  await audit(me.id, "draw.clear", categoryId);
+  revalidatePath(`/schedule/${cat.slotId}/draw`);
+  return { ok: "対戦表を削除しました" };
+}
+
+export async function setDrawPublished(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const categoryId = str(fd, "categoryId");
+  const on = bool(fd, "published");
+  const cat = await db.eventCategory.update({ where: { id: categoryId }, data: { drawPublished: on } });
+  await audit(me.id, "draw.publish", categoryId, on ? "公開" : "非公開");
+  revalidatePath(`/schedule/${cat.slotId}/draw`);
+  return { ok: on ? "対戦表を会員ページに公開しました" : "対戦表を非公開にしました" };
+}
+
+/** 試合結果の保存。トーナメントは勝者を次の試合へ進める */
+export async function saveMatchResult(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireStaff();
+  const id = str(fd, "matchId");
+  const m = await db.match.findUnique({ where: { id }, include: { category: true } });
+  if (!m) return { error: "試合が見つかりません" };
+  const w = str(fd, "winner");
+  const winnerId = w === "A" ? m.entryAId : w === "B" ? m.entryBId : null;
+  if (w && !winnerId) return { error: "対戦相手が決まっていません" };
+  await db.match.update({ where: { id }, data: { winnerId, score: optStr(fd, "score"), court: optStr(fd, "court") } });
+  if (m.nextMatchId && m.nextSlot != null) {
+    const prev = m.winnerId;
+    const next = await db.match.findUnique({ where: { id: m.nextMatchId } });
+    if (next) {
+      const data: { entryAId?: string | null; entryBId?: string | null; winnerId?: null; score?: null } = {};
+      if (m.nextSlot === 0) data.entryAId = winnerId;
+      else data.entryBId = winnerId;
+      // 勝者が変わった場合、次の試合の結果は取り消す
+      if (prev && prev !== winnerId && next.winnerId) {
+        data.winnerId = null;
+        data.score = null;
+      }
+      await db.match.update({ where: { id: next.id }, data });
+    }
+  }
+  revalidatePath(`/schedule/${m.category.slotId}/draw`);
+  revalidatePath(`/my/events/${m.category.slotId}`);
+  return { ok: "結果を保存しました" };
 }

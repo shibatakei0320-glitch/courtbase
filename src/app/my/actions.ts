@@ -1,13 +1,14 @@
 "use server";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { db, facilityModeOn } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { int, str, optStr, type ActionState } from "@/lib/action";
 import { BookingError, book, bookEntry, cancelDeadline, cancelReservation } from "@/lib/booking";
-import { categoryLabel, parseEntry } from "@/lib/entry";
+import { categoryLabel, currentPrice, parseEntry } from "@/lib/entry";
 import { refundReservation } from "@/lib/refund";
-import { notifyBooked, notifyCanceled } from "@/lib/notify";
+import { notifyBooked, notifyCanceled, notifyWaitlist } from "@/lib/notify";
 import { ADVANCE_DAYS, MAX_MIN, STEP_MIN, clearExpiredHolds, courtPrice, overlapsAny } from "@/lib/court-booking";
 import { fmtDateTime, fromJst, jstDateKey } from "@/lib/format";
 import { createMemberSession, destroyMemberSession, getLinePending, LINE_PENDING_COOKIE, requireMember } from "@/lib/member-auth";
@@ -75,10 +76,12 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
       db.reservation.findFirst({ where: { categoryId: cat.id, memberId: me.id, status: { in: ["RESERVED", "ATTENDED"] } } }),
     ]);
     if (dupEntry) return { error: "この種目にはすでにエントリーしています" };
-    if (taken >= cat.capacity) return { error: "この種目は定員に達しました" };
-    if (cat.price <= 0) {
+    if (taken >= cat.capacity) return { error: "この種目は定員に達しました。キャンセル待ちに登録できます" };
+    const fee = currentPrice(cat);
+    if (fee <= 0) {
       try {
         const r = await bookEntry(slotId, cat.id, me.id, entry);
+        await db.waitlist.deleteMany({ where: { categoryId: cat.id, memberId: me.id } });
         await notifyBooked(r.id);
       } catch (e) {
         if (e instanceof BookingError) return { error: e.message };
@@ -90,7 +93,7 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
     const meta = { slotId, memberId: me.id, categoryId: cat.id, teamName: entry.teamName ?? "", players: JSON.stringify(entry.players).slice(0, 490) };
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
-      line_items: [{ quantity: 1, price_data: { currency: "jpy", unit_amount: cat.price, product_data: { name: `${slot.title} ${categoryLabel(cat)}（${fmtDateTime(slot.startsAt)}）` } } }],
+      line_items: [{ quantity: 1, price_data: { currency: "jpy", unit_amount: fee, product_data: { name: `${slot.title} ${categoryLabel(cat)}（${fmtDateTime(slot.startsAt)}）` } } }],
       metadata: meta,
       payment_intent_data: { metadata: { slotId, memberId: me.id, categoryId: cat.id } },
       customer_email: me.email ?? undefined,
@@ -156,6 +159,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
   const amt = await refundReservation(r.id, "会員によるキャンセル");
   await audit(null, "reservation.member_cancel", r.id, amt ? `返金${amt}` : undefined);
   await notifyCanceled(r.id, amt);
+  if (r.categoryId) await notifyWaitlist(r.categoryId);
   redirect(`/my?canceled=${amt}`);
 }
 
@@ -245,4 +249,27 @@ export async function bookCourt(_: ActionState, fd: FormData): Promise<ActionSta
   }
   if (!url) return { error: "決済画面を作成できませんでした" };
   redirect(url);
+}
+
+/** キャンセル待ちに登録（満員の種目のみ） */
+export async function joinWaitlist(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const cat = await db.eventCategory.findUnique({ where: { id: str(fd, "categoryId") }, include: { slot: true } });
+  if (!cat || cat.slot.status !== "OPEN" || cat.slot.startsAt <= new Date()) return { error: "この種目にはキャンセル待ちできません" };
+  const [taken, mine] = await Promise.all([
+    db.reservation.count({ where: { categoryId: cat.id, status: { in: ["RESERVED", "ATTENDED"] } } }),
+    db.reservation.findFirst({ where: { categoryId: cat.id, memberId: me.id, status: { in: ["RESERVED", "ATTENDED"] } } }),
+  ]);
+  if (mine) return { error: "すでにエントリーしています" };
+  if (taken < cat.capacity) return { error: "空きがあります。このままエントリーできます" };
+  await db.waitlist.upsert({ where: { categoryId_memberId: { categoryId: cat.id, memberId: me.id } }, create: { categoryId: cat.id, memberId: me.id }, update: {} });
+  revalidatePath(`/my/events/${cat.slotId}`);
+  return { ok: "キャンセル待ちに登録しました。空きが出たらLINEでお知らせします" };
+}
+
+export async function leaveWaitlist(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  await db.waitlist.deleteMany({ where: { categoryId: str(fd, "categoryId"), memberId: me.id } });
+  revalidatePath(`/my/events/${str(fd, "slotId")}`);
+  return { ok: "キャンセル待ちを取り消しました" };
 }

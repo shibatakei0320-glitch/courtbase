@@ -66,16 +66,24 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         </div>
       </section>
 
-      {facility && <div className="grid grid-cols-2 gap-3">
-        <Link href="/my/court" className="rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
-          <span className="block text-sm font-bold">コートを予約</span>
-          <span className="mt-1 block text-xs text-[#13201A]/50">時間を選んで予約</span>
+      <div className={`grid gap-3 ${facility ? "grid-cols-3" : "grid-cols-1"}`}>
+        {facility && (
+          <>
+            <Link href="/my/court" className="rounded-2xl bg-white px-4 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+              <span className="block text-sm font-bold">コートを予約</span>
+              <span className="mt-1 block text-xs text-[#13201A]/50">時間を選んで予約</span>
+            </Link>
+            <Link href="/my/card" className="rounded-2xl bg-white px-4 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+              <span className="block text-sm font-bold">会員証</span>
+              <span className="mt-1 block text-xs text-[#13201A]/50">入退場用QRコード</span>
+            </Link>
+          </>
+        )}
+        <Link href="/my/history" className={`rounded-2xl bg-white px-4 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E] ${facility ? "" : "flex items-center justify-between"}`}>
+          <span className="block text-sm font-bold">{facility ? "履歴・領収書" : "エントリー履歴・領収書"}</span>
+          <span className="mt-1 block text-xs text-[#13201A]/50">{facility ? "申込みの記録" : "これまでの申込みと領収書"}</span>
         </Link>
-        <Link href="/my/card" className="rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
-          <span className="block text-sm font-bold">会員証</span>
-          <span className="mt-1 block text-xs text-[#13201A]/50">入退場用QRコード</span>
-        </Link>
-      </div>}
+      </div>
       </div>
 
       {sp.paid && <Notice>お支払いが完了しました。予約の反映まで数秒かかることがあります。表示されないときはページを再読み込みしてください。</Notice>}

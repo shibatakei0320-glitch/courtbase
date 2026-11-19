@@ -118,6 +118,7 @@ model Member {
   payments     Payment[]
   sessions     MemberSession[]
   visits       Visit[]
+  waitlists    Waitlist[]
 }
 
 model MemberSession {
@@ -305,10 +306,15 @@ model EventCategory {
   teamSize  Int         @default(4)
   capacity  Int         @default(16)
   price     Int         @default(0)
+  earlyPrice Int?       // 早期割引の参加費
+  earlyUntil DateTime?  // 早期割引の締切（この時刻まで）
+  drawPublished Boolean @default(false) // 対戦表を会員ページに公開
   sortOrder Int         @default(0)
   createdAt DateTime    @default(now())
 
   reservations Reservation[]
+  waitlist     Waitlist[]
+  matches      Match[]
 
   @@index([slotId])
 }
@@ -326,4 +332,38 @@ model EventMessage {
   createdAt  DateTime @default(now())
 
   @@index([slotId, createdAt])
+}
+
+/// 満員の種目のキャンセル待ち
+model Waitlist {
+  id         String        @id @default(cuid())
+  categoryId String
+  category   EventCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  notifiedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  @@unique([categoryId, memberId])
+}
+
+/// 対戦表の1試合。entryA/B と winner は Reservation.id
+model Match {
+  id         String        @id @default(cuid())
+  categoryId String
+  category   EventCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  stage      String        // LEAGUE | KNOCKOUT
+  groupName  String?
+  round      Int
+  position   Int
+  entryAId   String?
+  entryBId   String?
+  score      String?
+  winnerId   String?
+  court      String?
+  nextMatchId String?
+  nextSlot   Int?          // 0 = A, 1 = B
+  createdAt  DateTime      @default(now())
+
+  @@index([categoryId, stage, round, position])
 }

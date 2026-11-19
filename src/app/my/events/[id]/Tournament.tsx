@@ -3,9 +3,10 @@ import type { EventCategory, Member, Slot, Court, Program } from "@prisma/client
 import { db } from "@/lib/db";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { cancelDeadline } from "@/lib/booking";
-import { FORMAT_LABEL, categoryLabel, entryName, entrySize } from "@/lib/entry";
-import { fmtDateTime, yen } from "@/lib/format";
-import { applyEvent, cancelMyReservation } from "../../actions";
+import { FORMAT_LABEL, categoryLabel, currentPrice, entryName, entrySize, isEarly } from "@/lib/entry";
+import { fmtDate, fmtDateTime, yen } from "@/lib/format";
+import { roundLabel, standings } from "@/lib/draw";
+import { applyEvent, cancelMyReservation, joinWaitlist, leaveWaitlist } from "../../actions";
 import { Court as CourtLines, Fill, Notice, hm, jst } from "../../ui";
 
 const field = "mt-1.5 block w-full border-0 border-b border-[#13201A]/20 bg-transparent px-0 py-2 text-base text-[#13201A] placeholder:text-[#13201A]/30 focus:border-[#0F3D2E] focus:outline-none focus:ring-0";
@@ -24,6 +25,14 @@ export async function Tournament({ slot, cats, me, flash }: Props) {
     orderBy: { createdAt: "asc" },
   });
   const mine = res.filter((r) => r.memberId === me.id);
+  const [myWait, waitAll, matches, allEntries] = await Promise.all([
+    db.waitlist.findMany({ where: { memberId: me.id, categoryId: { in: cats.map((c) => c.id) } } }),
+    db.waitlist.findMany({ where: { categoryId: { in: cats.map((c) => c.id) } }, orderBy: { createdAt: "asc" }, select: { categoryId: true, memberId: true } }),
+    db.match.findMany({ where: { categoryId: { in: cats.filter((c) => c.drawPublished).map((c) => c.id) } }, orderBy: [{ groupName: "asc" }, { round: "asc" }, { position: "asc" }] }),
+    db.reservation.findMany({ where: { slotId: slot.id }, include: { member: { select: { lastName: true, firstName: true } } } }),
+  ]);
+  const nameOf = new Map(allEntries.map((r) => [r.id, entryName(r, `${r.member.lastName} ${r.member.firstName}`)]));
+  const waitPos = (cid: string) => waitAll.filter((w) => w.categoryId === cid).findIndex((w) => w.memberId === me.id) + 1;
   const byCat = (id: string) => res.filter((r) => r.categoryId === id);
   const deadline = await cancelDeadline(slot.startsAt);
   const canCancel = Date.now() <= deadline.at.getTime();
@@ -95,8 +104,12 @@ export async function Tournament({ slot, cats, me, flash }: Props) {
               <li key={c.id} className="rounded-2xl bg-white px-5 py-5">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="font-medium">{categoryLabel(c)}</p>
-                  <p className="shrink-0 font-display text-xl font-medium leading-none">{c.price > 0 ? yen(c.price) : "無料"}</p>
+                  <p className="shrink-0 text-right font-display text-xl font-medium leading-none">
+                    {isEarly(c) && c.price > currentPrice(c) && <span className="mr-2 text-sm text-[#13201A]/35 line-through">{yen(c.price)}</span>}
+                    {currentPrice(c) > 0 ? yen(currentPrice(c)) : "無料"}
+                  </p>
                 </div>
+                {isEarly(c) && <p className="mt-1 text-xs font-bold text-[#0F3D2E]">早期割引 {fmtDate(c.earlyUntil)}まで</p>}
                 <p className="mt-1 text-xs text-[#13201A]/55">{FORMAT_LABEL[c.format]}{c.format === "TEAM" ? `（${entrySize(c)}名）` : ""}　参加費は1{c.format === "SINGLES" ? "名" : c.format === "DOUBLES" ? "ペア" : "チーム"}あたり</p>
                 <div className="mt-3 flex items-center gap-3">
                   <span className="flex-1"><Fill taken={taken} capacity={c.capacity} /></span>
@@ -121,10 +134,28 @@ export async function Tournament({ slot, cats, me, flash }: Props) {
                       {c.format === "TEAM" && Array.from({ length: entrySize(c) - 1 }, (_, i) => (
                         <label key={i} className="block text-xs text-[#13201A]/60">メンバー{i + 2}の名前<input className={field} name={`player${i + 2}`} required maxLength={30} /></label>
                       ))}
-                      <Submit className={btn}>{c.price > 0 ? `カードで払ってエントリー（${yen(c.price)}）` : "エントリーする"}</Submit>
+                      <Submit className={btn}>{currentPrice(c) > 0 ? `カードで払ってエントリー（${yen(currentPrice(c))}）` : "エントリーする"}</Submit>
                     </ActionForm>
                   </details>
                 )}
+
+                {!entered && !closed && left <= 0 && (
+                  myWait.some((w) => w.categoryId === c.id) ? (
+                    <ActionForm action={leaveWaitlist} className="mt-4 flex items-center justify-between gap-3">
+                      <input type="hidden" name="categoryId" value={c.id} />
+                      <input type="hidden" name="slotId" value={slot.id} />
+                      <span className="text-sm">キャンセル待ち {waitPos(c.id)}番目<span className="block text-xs text-[#13201A]/50">空きが出たらLINEでお知らせします（先着順）</span></span>
+                      <Submit className="shrink-0 text-xs text-[#13201A]/55 underline underline-offset-4">取り消す</Submit>
+                    </ActionForm>
+                  ) : (
+                    <ActionForm action={joinWaitlist} className="mt-4">
+                      <input type="hidden" name="categoryId" value={c.id} />
+                      <Submit className="w-full rounded-xl border border-[#13201A]/25 py-3 text-sm font-bold text-[#13201A]/75 hover:bg-[#13201A]/5">キャンセル待ちに登録</Submit>
+                    </ActionForm>
+                  )
+                )}
+
+                {c.drawPublished && <DrawView matches={matches.filter((m) => m.categoryId === c.id)} nameOf={nameOf} />}
 
                 {slot.publicEntries && byCat(c.id).length > 0 && (
                   <details className="mt-4 border-t border-[#13201A]/10 pt-3">
@@ -141,5 +172,56 @@ export async function Tournament({ slot, cats, me, flash }: Props) {
         {closed && <p className="mt-3 px-1 text-sm text-[#13201A]/55">エントリーの受付は終了しました。</p>}
       </section>
     </div>
+  );
+}
+
+type M = { id: string; stage: string; groupName: string | null; round: number; position: number; entryAId: string | null; entryBId: string | null; winnerId: string | null; score: string | null; court: string | null };
+
+function DrawView({ matches, nameOf }: { matches: M[]; nameOf: Map<string, string> }) {
+  if (!matches.length) return null;
+  const nm = (id: string | null) => (id ? nameOf.get(id) ?? "" : "");
+  const lg = matches.filter((m) => m.stage === "LEAGUE");
+  const ko = matches.filter((m) => m.stage === "KNOCKOUT");
+  const groups = [...new Set(lg.map((m) => m.groupName ?? ""))];
+  const total = Math.max(0, ...ko.map((m) => m.round));
+  const Row = ({ m }: { m: M }) => (
+    <li className="py-2.5 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className={m.winnerId && m.winnerId === m.entryAId ? "font-bold" : ""}>{nm(m.entryAId) || "未定"}</span>
+        <span className="shrink-0 font-display text-base text-[#13201A]/60">{m.score ?? "vs"}</span>
+        <span className={`text-right ${m.winnerId && m.winnerId === m.entryBId ? "font-bold" : ""}`}>{nm(m.entryBId) || (m.stage === "KNOCKOUT" && m.round === 1 ? "—" : "未定")}</span>
+      </div>
+      {m.court && <p className="mt-0.5 text-center text-[11px] text-[#13201A]/45">コート {m.court}</p>}
+    </li>
+  );
+  return (
+    <details className="mt-4 border-t border-[#13201A]/10 pt-3" open>
+      <summary className="cursor-pointer text-xs font-bold text-[#0F3D2E]">対戦表・結果</summary>
+      {groups.map((g) => {
+        const gm = lg.filter((m) => (m.groupName ?? "") === g);
+        const ids = [...new Set(gm.flatMap((m) => [m.entryAId, m.entryBId]).filter(Boolean) as string[])];
+        return (
+          <div key={g} className="mt-3">
+            <p className="text-xs text-[#13201A]/55">グループ{g}</p>
+            <ol className="mt-1 divide-y divide-[#13201A]/10 border-y border-[#13201A]/10 text-sm">
+              {standings(ids, gm).map((s, i) => (
+                <li key={s.id} className="flex items-center gap-3 py-2">
+                  <span className="w-5 font-display text-base text-[#0F3D2E]">{i + 1}</span>
+                  <span className="flex-1">{nm(s.id)}</span>
+                  <span className="text-xs text-[#13201A]/55">{s.wins}勝{s.losses}敗</span>
+                </li>
+              ))}
+            </ol>
+            <ul className="mt-2 divide-y divide-[#13201A]/5">{gm.map((m) => <Row key={m.id} m={m} />)}</ul>
+          </div>
+        );
+      })}
+      {Array.from({ length: total }, (_, i) => i + 1).map((r) => (
+        <div key={r} className="mt-3">
+          <p className="text-xs text-[#13201A]/55">{roundLabel(r, total)}</p>
+          <ul className="divide-y divide-[#13201A]/5">{ko.filter((m) => m.round === r).map((m) => <Row key={m.id} m={m} />)}</ul>
+        </div>
+      ))}
+    </details>
   );
 }

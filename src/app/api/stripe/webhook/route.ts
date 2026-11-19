@@ -73,6 +73,7 @@ async function fulfill(s: Stripe.Checkout.Session) {
         if (Array.isArray(p)) players = p.map(String).slice(0, 20);
       } catch {}
       r = await bookEntry(slotId, categoryId, memberId, { teamName: s.metadata?.teamName || null, players });
+      await db.waitlist.deleteMany({ where: { categoryId, memberId } });
     } else {
       r = await book(slotId, memberId);
     }

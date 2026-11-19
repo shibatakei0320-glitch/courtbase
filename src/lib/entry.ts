@@ -42,3 +42,11 @@ export function parseEntry(
   }
   return { ok: true, teamName, players: [representative, ...others] };
 }
+
+/** 現在の参加費（早期割引の締切前なら早期料金） */
+export function currentPrice(c: Pick<EventCategory, "price" | "earlyPrice" | "earlyUntil">, now = new Date()) {
+  return c.earlyPrice != null && c.earlyUntil && now <= c.earlyUntil ? c.earlyPrice : c.price;
+}
+export function isEarly(c: Pick<EventCategory, "earlyPrice" | "earlyUntil">, now = new Date()) {
+  return c.earlyPrice != null && !!c.earlyUntil && now <= c.earlyUntil;
+}
