@@ -21,6 +21,26 @@ export async function book(slotId: string, memberId: string) {
   });
 }
 
+/** 大会の種目へのエントリー。種目ごとの定員と二重エントリーを確認する */
+export async function bookEntry(slotId: string, categoryId: string, memberId: string, entry: { teamName: string | null; players: string[] }) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Slot" WHERE id = ${slotId} FOR UPDATE`;
+    const slot = await tx.slot.findUnique({ where: { id: slotId } });
+    if (!slot) throw new BookingError("大会が見つかりません");
+    if (slot.status !== "OPEN") throw new BookingError("この大会は中止されています");
+    const cat = await tx.eventCategory.findFirst({ where: { id: categoryId, slotId } });
+    if (!cat) throw new BookingError("種目が見つかりません");
+    const member = await tx.member.findUnique({ where: { id: memberId } });
+    if (!member) throw new BookingError("会員が見つかりません");
+    if (member.status !== "ACTIVE") throw new BookingError("有効な会員ではありません（休会・退会中）");
+    const dup = await tx.reservation.findFirst({ where: { categoryId, memberId, status: { in: ["RESERVED", "ATTENDED"] } } });
+    if (dup) throw new BookingError("この種目にはすでにエントリーしています");
+    const count = await tx.reservation.count({ where: { categoryId, status: { in: ["RESERVED", "ATTENDED"] } } });
+    if (count >= cat.capacity) throw new BookingError("この種目は定員に達しています");
+    return tx.reservation.create({ data: { slotId, memberId, categoryId, teamName: entry.teamName, players: entry.players } });
+  });
+}
+
 /** 予約キャンセル。会員が時間指定で予約したコート利用なら、その時間も空ける */
 export async function cancelReservation(id: string) {
   const r = await db.reservation.findUnique({ where: { id }, include: { slot: true } });

@@ -8,15 +8,17 @@ import { applyEvent, cancelMyReservation } from "../../actions";
 import { cancelDeadline } from "@/lib/booking";
 import { fmtDateTime } from "@/lib/format";
 import { Court, Fill, hm, jst } from "../../ui";
+import { Tournament } from "./Tournament";
 
 export const metadata = { title: "予約" };
 const KIND_LABEL = { RENTAL: "コート利用", LESSON: "レッスン", EVENT: "大会・イベント" } as const;
 
-export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EventPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ paid?: string; entered?: string }> }) {
   const me = await requireMember();
   const { id } = await params;
-  const slot = await db.slot.findUnique({ where: { id }, include: { court: true, program: true } });
+  const slot = await db.slot.findUnique({ where: { id }, include: { court: true, program: true, categories: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] } } });
   if (!slot) notFound();
+  if (slot.categories.length > 0) return <Tournament slot={slot} cats={slot.categories} me={me} flash={await searchParams} />;
   const [taken, mine] = await Promise.all([
     db.reservation.count({ where: { slotId: id, status: { in: ["RESERVED", "ATTENDED"] } } }),
     db.reservation.findFirst({ where: { slotId: id, memberId: me.id, status: { in: ["RESERVED", "ATTENDED"] } } }),

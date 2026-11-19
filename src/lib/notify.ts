@@ -3,6 +3,7 @@ import { db } from "./db";
 import { pushLine } from "./line-message";
 import { appUrl } from "./url";
 import { fmtTime, jstDateKey, yen } from "./format";
+import { categoryLabel, entryName } from "./entry";
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 function when(start: Date, end: Date) {
@@ -13,14 +14,15 @@ function when(start: Date, end: Date) {
 
 async function load(reservationId: string) {
   const [r, s] = await Promise.all([
-    db.reservation.findUnique({ where: { id: reservationId }, include: { member: true, slot: { include: { court: true } } } }),
+    db.reservation.findUnique({ where: { id: reservationId }, include: { member: true, category: true, slot: { include: { court: true } } } }),
     db.setting.findUnique({ where: { id: 1 } }),
   ]);
   return r ? { r, name: s?.facilityName ?? "pickleland" } : null;
 }
 
 function body(r: NonNullable<Awaited<ReturnType<typeof load>>>["r"]) {
-  return `${when(r.slot.startsAt, r.slot.endsAt)}\n${r.slot.title}\n${r.slot.court.name}`;
+  const entry = r.category ? `\n種目：${categoryLabel(r.category)}${r.players.length > 1 || r.teamName ? `\nエントリー：${entryName(r)}` : ""}` : "";
+  return `${when(r.slot.startsAt, r.slot.endsAt)}\n${r.slot.title}\n${r.slot.court.name}${entry}`;
 }
 
 export async function notifyBooked(reservationId: string, amount = 0) {

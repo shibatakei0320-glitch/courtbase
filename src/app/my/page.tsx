@@ -29,7 +29,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
     }),
     db.slot.findMany({
       where: { status: "OPEN", memberBooked: false, startsAt: { gt: now }, ...(kind ? { kind } : {}) },
-      include: { _count: { select: { reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
+      include: { _count: { select: { categories: true, reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
       orderBy: { startsAt: "asc" },
       take: 60,
     }),
@@ -145,11 +145,11 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
                     <span className="min-w-0 flex-1">
                       <span className="block text-[11px] text-[#13201A]/45">{KIND_LABEL[s.kind]}</span>
                       <span className="block font-medium leading-snug group-hover:underline group-hover:underline-offset-4">{s.title}</span>
-                      <span className="mt-1 block text-xs text-[#13201A]/55">{hm(s.startsAt)}–{hm(s.endsAt)}　{s.price > 0 ? yen(s.price) : "参加無料"}</span>
+                      <span className="mt-1 block text-xs text-[#13201A]/55">{hm(s.startsAt)}–{hm(s.endsAt)}　{s._count.categories ? "参加費は種目ごと" : s.price > 0 ? yen(s.price) : "参加無料"}</span>
                       <span className="mt-3 flex items-center gap-3">
                         <span className="flex-1"><Fill taken={taken} capacity={s.capacity} /></span>
                         <span className={`shrink-0 text-xs ${joined ? "font-bold text-[#0F3D2E]" : left <= 0 ? "text-[#13201A]/40" : left <= 3 ? "font-bold text-[#B4371F]" : "text-[#13201A]/60"}`}>
-                          {joined ? "予約済み" : left <= 0 ? "満員" : `残り${left}名`}
+                          {joined ? (s._count.categories ? "エントリー済み" : "予約済み") : left <= 0 ? "満員" : s._count.categories ? `${s._count.categories}種目 受付中` : `残り${left}名`}
                         </span>
                       </span>
                     </span>

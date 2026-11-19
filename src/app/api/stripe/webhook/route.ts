@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { BookingError, book } from "@/lib/booking";
+import { BookingError, book, bookEntry } from "@/lib/booking";
 import { stripe } from "@/lib/stripe";
 import { fmtDateTime } from "@/lib/format";
 import { notifyBooked } from "@/lib/notify";
@@ -64,7 +64,18 @@ async function fulfill(s: Stripe.Checkout.Session) {
       if (slot.status !== "OPEN" || (slot.heldById && slot.heldById !== memberId)) throw new BookingError("この時間はすでに埋まっています");
       await db.slot.update({ where: { id: slotId }, data: { heldById: null, heldUntil: null } });
     }
-    const r = await book(slotId, memberId);
+    const categoryId = s.metadata?.categoryId;
+    let r;
+    if (categoryId) {
+      let players: string[] = [];
+      try {
+        const p = JSON.parse(s.metadata?.players ?? "[]");
+        if (Array.isArray(p)) players = p.map(String).slice(0, 20);
+      } catch {}
+      r = await bookEntry(slotId, categoryId, memberId, { teamName: s.metadata?.teamName || null, players });
+    } else {
+      r = await book(slotId, memberId);
+    }
     await db.payment.update({ where: { id: paymentId }, data: { reservationId: r.id } });
     await db.auditLog.create({ data: { action: "reservation.online_paid", target: r.id, detail: `${label} ${amount}円` } });
     await notifyBooked(r.id, amount);

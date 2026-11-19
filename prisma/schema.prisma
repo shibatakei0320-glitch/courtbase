@@ -191,6 +191,9 @@ model Slot {
   memberBooked Boolean    @default(false) // 会員が時間を選んで予約したコート利用
   heldById     String? // 決済中の仮押さえ（会員ID）
   heldUntil    DateTime?
+  publicEntries Boolean   @default(false) // 大会のエントリー一覧を会員ページに公開
+  categories   EventCategory[]
+  messages     EventMessage[]
   createdAt    DateTime   @default(now())
 
   reservations Reservation[]
@@ -208,6 +211,10 @@ model Reservation {
   status      ReservationStatus @default(RESERVED)
   canceledAt  DateTime?
   remindedAt  DateTime?
+  categoryId  String?
+  category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  teamName    String?
+  players     String[]       @default([])
   createdAt   DateTime          @default(now())
 
   @@index([slotId])
@@ -279,4 +286,44 @@ model Visit {
 
   @@index([checkInAt])
   @@index([memberId, checkInAt])
+}
+
+enum EntryFormat {
+  SINGLES
+  DOUBLES
+  TEAM
+}
+
+/// 大会の種目（形式×レベル）。定員は組数、参加費は1エントリーあたり
+model EventCategory {
+  id        String      @id @default(cuid())
+  slotId    String
+  slot      Slot        @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  name      String
+  format    EntryFormat @default(DOUBLES)
+  level     String?
+  teamSize  Int         @default(4)
+  capacity  Int         @default(16)
+  price     Int         @default(0)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  reservations Reservation[]
+
+  @@index([slotId])
+}
+
+/// 大会参加者へのLINE一括連絡の履歴
+model EventMessage {
+  id         String   @id @default(cuid())
+  slotId     String
+  slot       Slot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  categoryId String?
+  body       String
+  sentCount  Int      @default(0)
+  totalCount Int      @default(0)
+  staffId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([slotId, createdAt])
 }

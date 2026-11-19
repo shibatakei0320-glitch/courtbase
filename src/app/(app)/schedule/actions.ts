@@ -5,8 +5,11 @@ import type { ReservationStatus, SlotKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { BookingError, book, cancelReservation } from "@/lib/booking";
-import { int, optStr, str, type ActionState } from "@/lib/action";
+import { BookingError, book, bookEntry, cancelReservation } from "@/lib/booking";
+import { bool, int, optStr, str, type ActionState } from "@/lib/action";
+import type { EntryFormat } from "@prisma/client";
+import { entrySize } from "@/lib/entry";
+import { pushLine, lineMessagingConfigured } from "@/lib/line-message";
 import { fromJst, yen } from "@/lib/format";
 import { refundReservation } from "@/lib/refund";
 import { clearExpiredHolds } from "@/lib/court-booking";
@@ -107,8 +110,21 @@ export async function addReservation(_: ActionState, fd: FormData): Promise<Acti
   const me = await requireStaff();
   const slotId = str(fd, "slotId");
   const memberId = str(fd, "memberId");
+  const categoryId = str(fd, "categoryId");
   try {
-    const r = await book(slotId, memberId);
+    let r;
+    if (categoryId) {
+      const [cat, m] = await Promise.all([db.eventCategory.findUnique({ where: { id: categoryId } }), db.member.findUnique({ where: { id: memberId } })]);
+      if (!cat || !m) return { error: "種目または会員が見つかりません" };
+      const others = str(fd, "players").split(/[\n,、]/).map((x) => x.trim()).filter(Boolean).slice(0, 20);
+      const need = entrySize(cat) - 1;
+      if (others.length < need) return { error: `代表者以外のメンバーの名前を${need}名分入力してください（1行に1名）` };
+      const teamName = cat.format === "TEAM" ? optStr(fd, "teamName") : null;
+      if (cat.format === "TEAM" && !teamName) return { error: "チーム名を入力してください" };
+      r = await bookEntry(slotId, categoryId, memberId, { teamName, players: [`${m.lastName} ${m.firstName}`, ...others.slice(0, need)] });
+    } else {
+      r = await book(slotId, memberId);
+    }
     await audit(me.id, "reservation.create", r.id);
     await notifyBooked(r.id);
   } catch (e) {
@@ -143,4 +159,98 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   revalidatePath("/schedule/[id]", "page");
   revalidatePath("/reservations");
   return { ok: msg };
+}
+
+// ---- 大会の種目 ----
+
+const FORMATS: EntryFormat[] = ["SINGLES", "DOUBLES", "TEAM"];
+
+async function syncEventCapacity(slotId: string) {
+  // 種目がある大会は、枠全体の定員を種目の定員の合計にそろえる
+  const cats = await db.eventCategory.findMany({ where: { slotId }, select: { capacity: true } });
+  if (cats.length) await db.slot.update({ where: { id: slotId }, data: { capacity: cats.reduce((a, c) => a + c.capacity, 0) } });
+}
+
+export async function saveCategory(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const id = str(fd, "id");
+  const slotId = str(fd, "slotId");
+  const name = str(fd, "name");
+  const format = str(fd, "format") as EntryFormat;
+  if (!name) return { error: "種目名を入力してください" };
+  if (!FORMATS.includes(format)) return { error: "形式を選んでください" };
+  const data = {
+    name,
+    format,
+    level: optStr(fd, "level"),
+    teamSize: Math.min(20, Math.max(2, int(fd, "teamSize", 4))),
+    capacity: Math.max(1, int(fd, "capacity", 16)),
+    price: Math.max(0, int(fd, "price")),
+    sortOrder: int(fd, "sortOrder"),
+  };
+  if (id) {
+    const used = await db.reservation.count({ where: { categoryId: id, status: { in: ["RESERVED", "ATTENDED"] } } });
+    const cur = await db.eventCategory.findUnique({ where: { id } });
+    if (cur && used > 0 && cur.format !== format) return { error: "エントリーがある種目の形式は変更できません" };
+    if (used > data.capacity) return { error: `すでに${used}組がエントリーしています。定員はそれ以上にしてください` };
+    await db.eventCategory.update({ where: { id }, data });
+    await audit(me.id, "category.update", id, name);
+  } else {
+    const c = await db.eventCategory.create({ data: { ...data, slotId } });
+    await audit(me.id, "category.create", c.id, name);
+  }
+  await syncEventCapacity(slotId);
+  revalidatePath(`/schedule/${slotId}`);
+  return { ok: id ? "種目を更新しました" : "種目を追加しました" };
+}
+
+export async function deleteCategory(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const id = str(fd, "id");
+  const cat = await db.eventCategory.findUnique({ where: { id } });
+  if (!cat) return { error: "種目が見つかりません" };
+  const used = await db.reservation.count({ where: { categoryId: id, status: { not: "CANCELED" } } });
+  if (used > 0) return { error: "エントリーがある種目は削除できません" };
+  await db.eventCategory.delete({ where: { id } });
+  await audit(me.id, "category.delete", id, cat.name);
+  await syncEventCapacity(cat.slotId);
+  revalidatePath(`/schedule/${cat.slotId}`);
+  return { ok: "種目を削除しました" };
+}
+
+export async function setPublicEntries(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const id = str(fd, "slotId");
+  const on = bool(fd, "publicEntries");
+  await db.slot.update({ where: { id }, data: { publicEntries: on } });
+  await audit(me.id, "slot.public_entries", id, on ? "公開" : "非公開");
+  revalidatePath(`/schedule/${id}`);
+  return { ok: on ? "エントリー一覧を会員ページに公開しました" : "エントリー一覧を非公開にしました" };
+}
+
+/** 大会の参加者（代表者）のLINEへ一括送信 */
+export async function sendEventMessage(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const slotId = str(fd, "slotId");
+  const categoryId = str(fd, "categoryId") || null;
+  const body = str(fd, "body");
+  if (!body) return { error: "本文を入力してください" };
+  if (body.length > 2000) return { error: "本文は2000文字以内にしてください" };
+  if (!lineMessagingConfigured()) return { error: "LINE公式アカウントの設定がまだのため送信できません" };
+  const [slot, setting] = await Promise.all([db.slot.findUnique({ where: { id: slotId } }), db.setting.findUnique({ where: { id: 1 } })]);
+  if (!slot) return { error: "大会が見つかりません" };
+  const res = await db.reservation.findMany({
+    where: { slotId, status: { in: ["RESERVED", "ATTENDED"] }, ...(categoryId ? { categoryId } : {}) },
+    include: { member: { select: { id: true, lineUserId: true } } },
+  });
+  const members = new Map(res.map((r) => [r.member.id, r.member.lineUserId]));
+  if (members.size === 0) return { error: "送信先の参加者がいません" };
+  const text = `【${setting?.facilityName ?? "pickleland"}】${slot.title}\n\n${body}`;
+  let sent = 0;
+  for (const lineId of members.values()) if (await pushLine(lineId, text)) sent++;
+  await db.eventMessage.create({ data: { slotId, categoryId, body, sentCount: sent, totalCount: members.size, staffId: me.id } });
+  await audit(me.id, "event.message", slotId, `${sent}/${members.size}`);
+  revalidatePath(`/schedule/${slotId}`);
+  const missed = members.size - sent;
+  return { ok: `${sent}名に送信しました${missed ? `（LINE未連携などで${missed}名には届いていません）` : ""}` };
 }
