@@ -9,16 +9,31 @@ export function jst(d: Date) {
 }
 export const hm = (d: Date) => d.toLocaleTimeString("ja-JP", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
-/** 細い線で描いたピックルボールのコート（右寄せ・装飾） */
+/** 細い線で描いたコート（右寄せ・装飾）。NEXT_PUBLIC_SPORT=tennis ならテニスコート */
+const TENNIS = process.env.NEXT_PUBLIC_SPORT === "tennis";
 export function Court({ className = "", stroke = "white", opacity = 0.22 }: { className?: string; stroke?: string; opacity?: number }) {
   return (
     <svg viewBox="0 0 220 440" aria-hidden className={`pointer-events-none absolute ${className}`}>
       <g fill="none" stroke={stroke} strokeOpacity={opacity} strokeWidth="1">
         <rect x="10" y="10" width="200" height="420" />
-        <line x1="10" y1="152" x2="210" y2="152" />
-        <line x1="10" y1="288" x2="210" y2="288" />
-        <line x1="110" y1="10" x2="110" y2="152" />
-        <line x1="110" y1="288" x2="110" y2="430" />
+        {TENNIS ? (
+          <>
+            <line x1="35" y1="10" x2="35" y2="430" />
+            <line x1="185" y1="10" x2="185" y2="430" />
+            <line x1="35" y1="107" x2="185" y2="107" />
+            <line x1="35" y1="333" x2="185" y2="333" />
+            <line x1="110" y1="107" x2="110" y2="333" />
+            <line x1="110" y1="10" x2="110" y2="16" />
+            <line x1="110" y1="424" x2="110" y2="430" />
+          </>
+        ) : (
+          <>
+            <line x1="10" y1="152" x2="210" y2="152" />
+            <line x1="10" y1="288" x2="210" y2="288" />
+            <line x1="110" y1="10" x2="110" y2="152" />
+            <line x1="110" y1="288" x2="110" y2="430" />
+          </>
+        )}
       </g>
       <line x1="2" y1="220" x2="218" y2="220" stroke="#E4F25C" strokeOpacity="0.9" strokeWidth="1.5" />
     </svg>
