@@ -5,13 +5,18 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MEMBER_STATUS, PAY_METHOD, RES_STATUS, fmtDate, fmtDateTime, yen } from "@/lib/format";
 import { MemberForm } from "../MemberForm";
+import { EnrollmentPanel } from "./EnrollmentPanel";
+import { FamilyPanel } from "./FamilyPanel";
+import { SCHOOL } from "@/lib/brand";
+import { gradeLabel } from "@/lib/school";
 import { updateMember } from "../actions";
 
 export const metadata = { title: "会員詳細" };
 
-export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MemberPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ gq?: string }> }) {
   await requireStaff();
   const { id } = await params;
+  const { gq } = await searchParams;
   const member = await db.member.findUnique({
     where: { id },
     include: {
@@ -23,26 +28,35 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   });
   if (!member) notFound();
   const plans = await db.plan.findMany({ orderBy: { sortOrder: "asc" } });
+  const contact = member.lineUserId ? await db.lineContact.findUnique({ where: { lineUserId: member.lineUserId } }) : null;
   const total = member.payments.reduce((s, p) => s + p.amount, 0);
   return (
     <>
       <PageHeader
-        title={`${member.lastName} ${member.firstName}`}
+        title={`${member.lastName} ${member.firstName}${gradeLabel(member.birthDate) ? `（${gradeLabel(member.birthDate)}）` : ""}`}
         back="/members"
-        actions={<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link>}
+        actions={<>{contact && <Link className="btn-secondary" href={`/inbox/${contact.id}?f=all`}>LINEの会話</Link>}<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link></>}
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="会員番号" value={String(member.memberNo).padStart(6, "0")} />
         <Stat label="ステータス" value={<span className="flex gap-1"><Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>{member.lineUserId && <Badge tone="blue">LINE連携</Badge>}</span>} />
         <Stat label="累計入金" value={yen(total)} />
       </div>
-      <div>
-        <div className="card p-6">
+      <div className={SCHOOL ? "grid gap-4 lg:grid-cols-3" : ""}>
+        <div className={`card p-6 ${SCHOOL ? "lg:col-span-2" : ""}`}>
           <h2 className="mb-4 font-semibold">会員情報</h2>
           <MemberForm action={updateMember} member={member} plans={plans} />
           <p className="mt-4 text-xs text-slate-400">入会日 {fmtDate(member.joinedAt)} ／ 更新 {fmtDateTime(member.updatedAt)}</p>
         </div>
+        {SCHOOL && <div><FamilyPanel memberId={member.id} gq={gq} /></div>}
       </div>
+
+      {SCHOOL && (
+        <>
+          <h2 className="mb-3 mt-8 font-semibold">在籍管理</h2>
+          <EnrollmentPanel memberId={member.id} />
+        </>
+      )}
 
       <h2 className="mb-3 mt-8 font-semibold">予約履歴</h2>
       <div className="card overflow-x-auto">
@@ -55,7 +69,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <td>{fmtDateTime(r.slot.startsAt)}</td>
                   <td><Link className="text-brand-700 hover:underline" href={`/schedule/${r.slotId}`}>{r.slot.title}</Link></td>
                   <td>{r.slot.court.name}</td>
-                  <td>{RES_STATUS[r.status]}</td>
+                  <td>{r.kind === "REGULAR" && r.status === "CANCELED" ? "欠席連絡" : RES_STATUS[r.status]}{r.kind === "MAKEUP" && <span className="ml-1"><Badge tone="yellow">振替</Badge></span>}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,11 +3,17 @@ import { ActionForm, Submit } from "@/components/ActionForm";
 import { MEMBER_STATUS, jstDateKey } from "@/lib/format";
 import type { ActionState } from "@/lib/action";
 
-export function MemberForm({ action, member, plans }: { action: (p: ActionState, fd: FormData) => Promise<ActionState>; member?: Member; plans: Plan[] }) {
-  const m = member;
+export function MemberForm({ action, member, plans, guardian }: { action: (p: ActionState, fd: FormData) => Promise<ActionState>; member?: Member; plans: Plan[]; guardian?: Member | null }) {
+  const m = member ?? (guardian ? ({ lastName: guardian.lastName, lastKana: guardian.lastKana, phone: guardian.phone } as Member) : undefined);
   return (
     <ActionForm action={action} className="grid gap-4 sm:grid-cols-2">
-      {m && <input type="hidden" name="id" value={m.id} />}
+      {member && <input type="hidden" name="id" value={member.id} />}
+      {guardian && !member && (
+        <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-700 sm:col-span-2">
+          <input type="hidden" name="guardianId" value={guardian.id} />
+          保護者：{guardian.lastName} {guardian.firstName}さんのお子さまとして登録します（お知らせは保護者のLINEに届きます）
+        </p>
+      )}
       <label className="block"><span className="label">姓 *</span><input className="input" name="lastName" defaultValue={m?.lastName} required /></label>
       <label className="block"><span className="label">名 *</span><input className="input" name="firstName" defaultValue={m?.firstName} required /></label>
       <label className="block"><span className="label">セイ</span><input className="input" name="lastKana" defaultValue={m?.lastKana ?? ""} /></label>

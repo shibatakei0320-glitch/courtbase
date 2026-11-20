@@ -2,7 +2,7 @@
 
 export function PrintButton() {
   return (
-    <button onClick={() => window.print()} className="w-full rounded-xl bg-[#0F3D2E] py-4 text-sm font-bold text-white transition hover:bg-[#0B2F23]">
+    <button onClick={() => window.print()} className="w-full rounded-xl bg-[#0B6B4F] py-4 text-sm font-bold text-white transition hover:bg-[#08553F]">
       印刷・PDFで保存
     </button>
   );
