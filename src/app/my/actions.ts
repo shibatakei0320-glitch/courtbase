@@ -47,7 +47,7 @@ export async function registerMember(_: ActionState, fd: FormData): Promise<Acti
   }
   if (!member) {
     if (email && (await db.member.findUnique({ where: { email } })))
-      return { error: "このメールアドレスは既に登録されています。施設スタッフにお問い合わせください" };
+      return { error: "このメールアドレスは既に登録されています。スクールにお問い合わせください" };
     member = await db.member.create({
       data: {
         lineUserId: pending.sub,
@@ -70,7 +70,7 @@ export async function registerMember(_: ActionState, fd: FormData): Promise<Acti
 /** 予約・申込み（レッスン・コート貸切・大会/イベント）。有料ならStripe決済画面へ、無料ならその場で予約 */
 export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。施設スタッフにお問い合わせください" };
+  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。スクールにお問い合わせください" };
   const slotId = str(fd, "slotId");
   const slot = await db.slot.findUnique({ where: { id: slotId } });
   if (!slot || slot.status !== "OPEN" || slot.memberBooked) return { error: "この枠は予約できません" };
@@ -102,7 +102,7 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
       }
       redirect(`/my/events/${slotId}?entered=1`);
     }
-    if (!stripeConfigured()) return { error: "オンライン決済の準備中です。施設スタッフにお問い合わせください" };
+    if (!stripeConfigured()) return { error: "オンライン決済の準備中です。スクールにお問い合わせください" };
     const meta = { slotId, memberId: me.id, categoryId: cat.id, teamName: entry.teamName ?? "", players: JSON.stringify(entry.players).slice(0, 490) };
     const session = await stripe().checkout.sessions.create({
       mode: "payment",
@@ -136,7 +136,7 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
     redirect("/my?applied=1");
   }
 
-  if (!stripeConfigured()) return { error: "オンライン決済の準備中です。施設スタッフにお問い合わせください" };
+  if (!stripeConfigured()) return { error: "オンライン決済の準備中です。スクールにお問い合わせください" };
   const session = await stripe().checkout.sessions.create({
     mode: "payment",
     line_items: [
@@ -164,7 +164,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
   if (!r) return { error: "キャンセルできる予約がありません" };
   if (r.kind === "REGULAR") return { error: "クラスの回は「欠席連絡」からお休みしてください" };
   const { at, hours } = await cancelDeadline(r.slot.startsAt);
-  if (Date.now() > at.getTime()) return { error: `キャンセルの期限（開始の${hours}時間前）を過ぎています。施設スタッフにお問い合わせください` };
+  if (Date.now() > at.getTime()) return { error: `キャンセルの期限（開始の${hours}時間前）を過ぎています。スクールにお問い合わせください` };
   if (r.kind === "MAKEUP") {
     try {
       await cancelMakeup(r.id);
@@ -192,7 +192,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
 /** 時間を選んでコートを予約。有料なら30分仮押さえして決済へ */
 export async function bookCourt(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。施設スタッフにお問い合わせください" };
+  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。スクールにお問い合わせください" };
   if (!(await facilityModeOn())) return { error: "コートの予約は現在受け付けていません" };
   const courtId = str(fd, "courtId");
   const date = str(fd, "date");
@@ -253,7 +253,7 @@ export async function bookCourt(_: ActionState, fd: FormData): Promise<ActionSta
   }
   if (!stripeConfigured()) {
     await db.slot.delete({ where: { id: slotId } });
-    return { error: "オンライン決済の準備中です。施設スタッフにお問い合わせください" };
+    return { error: "オンライン決済の準備中です。スクールにお問い合わせください" };
   }
   let url: string | null = null;
   try {

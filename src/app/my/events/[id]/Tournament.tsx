@@ -83,7 +83,7 @@ export async function Tournament({ slot, cats, me, flash }: Props) {
                       </Submit>
                     </ActionForm>
                   ) : (
-                    <p className="mt-2 text-xs text-[#1A2420]/50">取り消しの期限（開始の{deadline.hours}時間前）を過ぎました。施設スタッフにお問い合わせください。</p>
+                    <p className="mt-2 text-xs text-[#1A2420]/50">取り消しの期限（開始の{deadline.hours}時間前）を過ぎました。スクールにお問い合わせください。</p>
                   ))}
                 </li>
               );

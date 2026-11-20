@@ -27,7 +27,7 @@ export default async function MemberCard() {
       <p className="px-1 text-xs leading-relaxed text-[#1A2420]/55">
         入場・退場のときに、受付でこの画面を見せてください。画面を明るくすると読み取りやすくなります。会員証はご本人だけがお使いいただけます。
       </p>
-      {me.status !== "ACTIVE" && <p className="border-l-2 border-[#C2410C] bg-white px-4 py-3 text-sm">現在、休会中です。ご利用の際は施設スタッフにお声がけください。</p>}
+      {me.status !== "ACTIVE" && <p className="border-l-2 border-[#C2410C] bg-white px-4 py-3 text-sm">現在、休会中です。ご利用の際はスクールにお声がけください。</p>}
     </div>
   );
 }
