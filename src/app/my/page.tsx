@@ -67,7 +67,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
               <h1 className="mt-3 text-[1.6rem] font-bold leading-[1.4]">
                 参加したいイベントを<br />選んで申し込むだけ。
               </h1>
-              <p className="mt-3 max-w-[22rem] text-sm leading-relaxed text-[#13201A]/70">
+              <p className="mt-3 max-w-[26rem] text-sm leading-relaxed text-[#13201A]/70">
                 {facility ? "コートの予約、レッスン、大会・イベントの申込みが、このページでできます。" : "大会・イベントの申込みは、スマホでこのページから。参加費はカードで払えて、予定はLINEでお知らせします。"}
               </p>
               <ol className="mt-5 grid grid-cols-3 gap-2 text-center">
