@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 import { Barlow_Condensed, Zen_Kaku_Gothic_New } from "next/font/google";
 import { db } from "@/lib/db";
@@ -5,7 +6,7 @@ import { getCurrentMember } from "@/lib/member-auth";
 import { memberLogout } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: { default: "pickleland", template: "%s | pickleland" } };
+export const metadata = { title: { default: BRAND, template: `%s | ${BRAND}` } };
 
 const num = Barlow_Condensed({ weight: ["500", "600"], subsets: ["latin"], variable: "--font-display", display: "swap" });
 const body = Zen_Kaku_Gothic_New({ weight: ["400", "500", "700"], subsets: ["latin"], preload: false, display: "swap" });
@@ -15,7 +16,7 @@ export default async function MemberLayout({ children }: { children: React.React
   return (
     <div className={`${body.className} ${num.variable} min-h-screen bg-[#F2F3F0] text-[#13201A] antialiased`}>
       <header className="mx-auto flex max-w-xl print:hidden items-center justify-between gap-3 px-5 pb-3 pt-5">
-        <Link href="/my" className="font-display text-xl font-semibold tracking-[0.04em] text-[#0F3D2E]">{setting?.facilityName ?? "pickleland"}</Link>
+        <Link href="/my" className="font-display text-xl font-semibold tracking-[0.04em] text-[#0F3D2E]">{setting?.facilityName ?? BRAND}</Link>
         {me && (
           <form action={memberLogout} className="flex items-center gap-4 text-xs">
             <span className="text-[#13201A]/60">{me.lastName} {me.firstName}</span>

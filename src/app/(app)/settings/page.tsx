@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
@@ -10,7 +11,7 @@ export const metadata = { title: "施設設定" };
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: BRAND, openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />

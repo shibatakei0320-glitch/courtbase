@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 import { requireStaff, ROLE_LABEL, canManage } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -33,7 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="relative flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:sticky md:top-0 md:block md:h-screen md:w-60 md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r md:px-3 md:py-4">
         <Link href="/dashboard" className="flex items-center gap-2 md:mb-4 md:px-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 font-bold text-white">P</span>
-          <span className="truncate font-bold">{setting?.facilityName ?? "pickleland"}</span>
+          <span className="truncate font-bold">{setting?.facilityName ?? BRAND}</span>
         </Link>
         <Nav items={items} />
       </aside>

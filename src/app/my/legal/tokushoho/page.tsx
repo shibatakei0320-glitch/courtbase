@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import { db } from "@/lib/db";
 import { DISCLOSE_ON_REQUEST, cancelPolicy } from "@/lib/legal";
 import { LegalDoc } from "../Doc";
@@ -7,7 +8,7 @@ export const metadata = { title: "特定商取引法に基づく表記" };
 export default async function Tokushoho() {
   const s = await db.setting.findUnique({ where: { id: 1 } });
   const rows: [string, string][] = [
-    ["販売事業者", s?.legalSeller || s?.facilityName || "pickleland"],
+    ["販売事業者", s?.legalSeller || s?.facilityName || BRAND],
     ["運営責任者", s?.legalManager || DISCLOSE_ON_REQUEST],
     ["所在地", s?.legalAddress || DISCLOSE_ON_REQUEST],
     ["電話番号", s?.legalPhone || DISCLOSE_ON_REQUEST],

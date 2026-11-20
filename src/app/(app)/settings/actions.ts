@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
@@ -8,7 +9,7 @@ import { bool, int, optStr, str, type ActionState } from "@/lib/action";
 export async function saveSettings(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff(["OWNER"]);
   const data = {
-    facilityName: str(fd, "facilityName") || "pickleland",
+    facilityName: str(fd, "facilityName") || BRAND,
     openHour: Math.min(23, Math.max(0, int(fd, "openHour", 7))),
     closeHour: Math.min(24, Math.max(1, int(fd, "closeHour", 23))),
     cancelDeadlineHours: Math.max(0, int(fd, "cancelDeadlineHours", 24)),

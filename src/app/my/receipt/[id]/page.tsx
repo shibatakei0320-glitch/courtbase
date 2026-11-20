@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -14,7 +15,7 @@ export default async function Receipt({ params, searchParams }: { params: Promis
   const [p, s] = await Promise.all([db.payment.findFirst({ where: { id, memberId: me.id } }), db.setting.findUnique({ where: { id: 1 } })]);
   if (!p || p.amount <= 0) notFound();
   const to = (name ?? `${me.lastName} ${me.firstName}`).slice(0, 40);
-  const issuer = s?.legalSeller || s?.facilityName || "pickleland";
+  const issuer = s?.legalSeller || s?.facilityName || BRAND;
   const no = p.id.slice(-10).toUpperCase();
   const tax = Math.floor((p.amount * 10) / 110);
 

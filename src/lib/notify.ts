@@ -1,3 +1,4 @@
+import { BRAND } from "@/lib/brand";
 import "server-only";
 import { db } from "./db";
 import { pushLine } from "./line-message";
@@ -17,7 +18,7 @@ async function load(reservationId: string) {
     db.reservation.findUnique({ where: { id: reservationId }, include: { member: true, category: true, slot: { include: { court: true } } } }),
     db.setting.findUnique({ where: { id: 1 } }),
   ]);
-  return r ? { r, name: s?.facilityName ?? "pickleland" } : null;
+  return r ? { r, name: s?.facilityName ?? BRAND } : null;
 }
 
 function body(r: NonNullable<Awaited<ReturnType<typeof load>>>["r"]) {
@@ -60,7 +61,7 @@ export async function notifyWaitlist(categoryId: string) {
   const list = await db.waitlist.findMany({ where: { categoryId }, include: { member: true }, orderBy: { createdAt: "asc" } });
   if (!list.length) return 0;
   const s = await db.setting.findUnique({ where: { id: 1 } });
-  const name = s?.facilityName ?? "pickleland";
+  const name = s?.facilityName ?? BRAND;
   const label = cat.level ? `${cat.name}（${cat.level}）` : cat.name;
   let sent = 0;
   for (const w of list) {
