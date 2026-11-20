@@ -1,4 +1,4 @@
-import { BRAND } from "@/lib/brand";
+import { BRAND, BRAND_MARK, SCHOOL } from "@/lib/brand";
 import Link from "next/link";
 import { requireStaff, ROLE_LABEL, canManage } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -17,18 +17,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/schedule", label: "スケジュール" },
     { href: "/reservations", label: "予約一覧" },
     { href: "/members", label: "会員" },
-    { href: "/classes", label: "クラス", section: "スクール" },
-    { href: "/enrollments", label: "在籍台帳", section: "スクール" },
-    { href: "/makeups", label: "振替", section: "スクール" },
-    { href: "/tuition", label: "月謝", section: "お金" },
-    { href: "/payments", label: "売上", section: "お金" },
+    ...(SCHOOL
+      ? [
+          { href: "/classes", label: "クラス", section: "スクール" },
+          { href: "/enrollments", label: "在籍台帳", section: "スクール" },
+          { href: "/makeups", label: "振替", section: "スクール" },
+          { href: "/tuition", label: "月謝", section: "お金" },
+          { href: "/payments", label: "売上", section: "お金" },
+        ]
+      : [{ href: "/payments", label: "売上" }]),
   ];
   if (canManage(me.role)) {
     if (me.role === "OWNER") items.push({ href: "/settings", label: "施設設定", section: "設定" });
     items.push(
       { href: "/master/courts", label: "コート", section: "設定" },
       { href: "/master/programs", label: "プログラム", section: "設定" },
-      { href: "/master/levels", label: "レベル", section: "設定" },
+      ...(SCHOOL ? [{ href: "/master/levels", label: "レベル", section: "設定" }] : []),
       { href: "/master/plans", label: "会員プラン", section: "設定" },
       { href: "/staff", label: "スタッフ", section: "設定" },
       { href: "/audit-logs", label: "操作ログ", section: "設定" },
@@ -39,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen md:flex">
       <aside className="relative flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:sticky md:top-0 md:block md:h-screen md:w-60 md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r md:px-3 md:py-4">
         <Link href="/dashboard" className="flex items-center gap-2 md:mb-4 md:px-2">
-          <span className="flex h-8 w-10 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold tracking-tight text-white">48K</span>
+          <span className="flex h-8 min-w-8 px-1 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">{BRAND_MARK}</span>
           <span className="truncate font-bold">{setting?.facilityName ?? BRAND}</span>
         </Link>
         <Nav items={items} />

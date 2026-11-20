@@ -86,7 +86,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               </ActionForm>
             </>
           ) : (
-            <p className="mt-2 text-sm leading-relaxed text-[#1A2420]/65">キャンセルの期限（開始の{deadline.hours}時間前）を過ぎました。やむを得ない場合はスクールにお問い合わせください。</p>
+            <p className="mt-2 text-sm leading-relaxed text-[#1A2420]/65">キャンセルの期限（開始の{deadline.hours}時間前）を過ぎました。やむを得ない場合はスタッフにお問い合わせください。</p>
           )}
         </section>
       )}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Barlow_Condensed, Zen_Kaku_Gothic_New } from "next/font/google";
 import { db } from "@/lib/db";
-import { BRAND } from "@/lib/brand";
+import { BRAND, BRAND_MARK } from "@/lib/brand";
 import { getCurrentMember } from "@/lib/member-auth";
 import { memberLogout } from "./actions";
 
@@ -19,7 +19,7 @@ export default async function MemberLayout({ children }: { children: React.React
       <header className="sticky top-0 z-20 border-b border-[#1A2420]/10 bg-white/95 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/my" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg bg-[#0B6B4F] text-sm font-bold tracking-tight text-[#E3F04B]">48K</span>
+            <span className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-lg bg-[#0B6B4F] px-1.5 text-sm font-bold tracking-tight text-[#E3F04B]">{BRAND_MARK}</span>
             <span className="truncate text-base font-bold">{name}</span>
           </Link>
           {me && (

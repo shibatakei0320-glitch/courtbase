@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { BRAND, SCHOOL } from "../src/lib/brand";
 
 const db = new PrismaClient();
 const jst = (date: string, time: string) => new Date(`${date}T${time}:00+09:00`);
@@ -8,7 +9,7 @@ const dayKey = (offset: number) => new Date(Date.now() + 9 * 3600_000 + offset *
 async function main() {
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@example.com";
   const password = process.env.SEED_OWNER_PASSWORD ?? "ChangeMe123";
-  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "48Kテニススクール" } });
+  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: BRAND } });
   const owner = await db.staff.upsert({
     where: { email },
     update: {},
@@ -44,7 +45,9 @@ async function main() {
     for (const m of members.slice(0, 3 + ((d + 1) % 4))) await db.reservation.create({ data: { slotId: s1.id, memberId: m.id, status: d < 0 ? "ATTENDED" : "RESERVED" } });
   }
 
-  // スクール：レベル・定期クラス・在籍・4週間分の回
+  console.log("demo data created");
+  if (!SCHOOL) return;
+  // スクール（NEXT_PUBLIC_SPORT=tennis のとき）：レベル・定期クラス・在籍・4週間分の回
   const [lv1, lv2] = await Promise.all([
     db.level.create({ data: { name: "初級", rank: 1, color: "#10b981" } }),
     db.level.create({ data: { name: "中級", rank: 2, color: "#f59e0b" } }),

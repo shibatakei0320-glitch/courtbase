@@ -86,7 +86,7 @@ export async function botAction(lineUserId: string, data: URLSearchParams): Prom
   const member = await db.member.findUnique({ where: { lineUserId } });
   if (!member) return [await linkPrompt()];
   const fam = (await familyOf(member)).filter((m) => m.status === "ACTIVE");
-  if (!fam.length) return [text("現在、休会・退会の扱いになっています。スクールにお問い合わせください。", [])];
+  if (!fam.length) return [text("現在、休会・退会の扱いになっています。スタッフにお問い合わせください。", [])];
   const famIds = fam.map((m) => m.id);
   const byId = new Map(fam.map((m) => [m.id, m]));
   const multi = fam.length > 1;

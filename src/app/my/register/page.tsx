@@ -1,3 +1,4 @@
+import { SCHOOL } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { getCurrentMember, getLinePending } from "@/lib/member-auth";
@@ -17,8 +18,8 @@ export default async function RegisterPage() {
     <div className="space-y-8 pt-2">
       <div className="px-1">
         <h1 className="text-2xl font-bold">会員登録</h1>
-        <p className="mt-2 text-base leading-relaxed text-[#5B6661]">{pending.name ? `${pending.name}さんのLINEと連携します。` : "LINEと連携して登録します。"}すでにスクールに通っている方は、登録済みの氏名・電話番号を入れると、会員情報とつながります。</p>
-        <p className="mt-2 text-sm leading-relaxed text-[#5B6661]">ジュニアの保護者の方は、まず保護者ご本人の情報を登録してください。お子さまは登録のあと「家族の登録」から追加できます。</p>
+        <p className="mt-2 text-base leading-relaxed text-[#5B6661]">{pending.name ? `${pending.name}さんのLINEと連携します。` : "LINEと連携して登録します。"}すでに会員の方は、登録済みの氏名・電話番号を入れると、会員情報とつながります。</p>
+        {SCHOOL && <p className="mt-2 text-sm leading-relaxed text-[#5B6661]">ジュニアの保護者の方は、まず保護者ご本人の情報を登録してください。お子さまは登録のあと「家族の登録」から追加できます。</p>}
       </div>
       <div className="rounded-2xl bg-white px-5 py-6">
         <ActionForm action={registerMember} className="space-y-5">

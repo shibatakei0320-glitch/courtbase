@@ -7,6 +7,7 @@ import { MEMBER_STATUS, PAY_METHOD, RES_STATUS, fmtDate, fmtDateTime, yen } from
 import { MemberForm } from "../MemberForm";
 import { EnrollmentPanel } from "./EnrollmentPanel";
 import { FamilyPanel } from "./FamilyPanel";
+import { SCHOOL } from "@/lib/brand";
 import { gradeLabel } from "@/lib/school";
 import { updateMember } from "../actions";
 
@@ -41,17 +42,21 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
         <Stat label="ステータス" value={<span className="flex gap-1"><Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>{member.lineUserId && <Badge tone="blue">LINE連携</Badge>}</span>} />
         <Stat label="累計入金" value={yen(total)} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-6 lg:col-span-2">
+      <div className={SCHOOL ? "grid gap-4 lg:grid-cols-3" : ""}>
+        <div className={`card p-6 ${SCHOOL ? "lg:col-span-2" : ""}`}>
           <h2 className="mb-4 font-semibold">会員情報</h2>
           <MemberForm action={updateMember} member={member} plans={plans} />
           <p className="mt-4 text-xs text-slate-400">入会日 {fmtDate(member.joinedAt)} ／ 更新 {fmtDateTime(member.updatedAt)}</p>
         </div>
-        <div><FamilyPanel memberId={member.id} gq={gq} /></div>
+        {SCHOOL && <div><FamilyPanel memberId={member.id} gq={gq} /></div>}
       </div>
 
-      <h2 className="mb-3 mt-8 font-semibold">在籍管理</h2>
-      <EnrollmentPanel memberId={member.id} />
+      {SCHOOL && (
+        <>
+          <h2 className="mb-3 mt-8 font-semibold">在籍管理</h2>
+          <EnrollmentPanel memberId={member.id} />
+        </>
+      )}
 
       <h2 className="mb-3 mt-8 font-semibold">予約履歴</h2>
       <div className="card overflow-x-auto">
