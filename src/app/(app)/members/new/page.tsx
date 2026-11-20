@@ -6,13 +6,17 @@ import { createMember } from "../actions";
 
 export const metadata = { title: "新規会員登録" };
 
-export default async function NewMemberPage() {
+export default async function NewMemberPage({ searchParams }: { searchParams: Promise<{ guardian?: string }> }) {
   await requireStaff();
-  const plans = await db.plan.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } });
+  const { guardian: gid } = await searchParams;
+  const [plans, guardian] = await Promise.all([
+    db.plan.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
+    gid ? db.member.findFirst({ where: { id: gid, guardianId: null } }) : null,
+  ]);
   return (
     <>
-      <PageHeader title="新規会員登録" back="/members" />
-      <div className="card max-w-3xl p-6"><MemberForm action={createMember} plans={plans} /></div>
+      <PageHeader title={guardian ? "お子さまの会員登録" : "新規会員登録"} back={guardian ? `/members/${guardian.id}` : "/members"} />
+      <div className="card max-w-3xl p-6"><MemberForm action={createMember} plans={plans} guardian={guardian} /></div>
     </>
   );
 }

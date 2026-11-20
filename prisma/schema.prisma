@@ -139,6 +139,9 @@ model Member {
   credits      MakeupCredit[]
   leaves       Leave[]
   invoices     Invoice[]
+  guardianId   String? // 保護者（ジュニア会員の場合。保護者のLINE・会員ページで手続きする）
+  guardian     Member?         @relation("Family", fields: [guardianId], references: [id], onDelete: SetNull)
+  children     Member[]        @relation("Family")
 }
 
 model MemberSession {
@@ -284,7 +287,7 @@ model AuditLog {
 
 model Setting {
   id                   Int     @id @default(1)
-  facilityName         String  @default("CourtBase")
+  facilityName         String  @default("48Kテニススクール")
   openHour             Int     @default(7)
   closeHour            Int     @default(23)
   cancelDeadlineHours  Int     @default(24)
@@ -415,24 +418,30 @@ model Level {
 }
 
 /// 毎週決まった曜日・時間に行う定期クラス。回（Slot）は月ごとなどにまとめて生成する
+enum ClassTarget {
+  ADULT
+  JUNIOR
+}
+
 model SchoolClass {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
+  target      ClassTarget @default(ADULT) // 一般 / ジュニア（振替は同じ区分のクラスのみ）
   levelId     String?
-  level       Level?   @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  level       Level?      @relation(fields: [levelId], references: [id], onDelete: SetNull)
   weekday     Int // 0=日 … 6=土（JST）
   startTime   String // "HH:mm"
-  durationMin Int      @default(90)
+  durationMin Int         @default(90)
   courtId     String
-  court       Court    @relation(fields: [courtId], references: [id], onDelete: Restrict)
+  court       Court       @relation(fields: [courtId], references: [id], onDelete: Restrict)
   coachId     String?
-  coach       Staff?   @relation("Coach", fields: [coachId], references: [id], onDelete: SetNull)
+  coach       Staff?      @relation("Coach", fields: [coachId], references: [id], onDelete: SetNull)
   planId      String? // 月謝（月額プラン）
-  plan        Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
-  capacity    Int      @default(8)
+  plan        Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  capacity    Int         @default(8)
   description String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
 
   enrollments Enrollment[]
   slots       Slot[]
@@ -462,6 +471,7 @@ model MakeupCredit {
   reason              String // 欠席連絡 / 休講 / 手動発行 など
   sourceReservationId String?      @unique // 欠席したレッスンの予約
   levelRank           Int? // 欠席したクラスのレベル（振替先の制限に使う）
+  target              ClassTarget? // 欠席したクラスの区分（一般 / ジュニア）
   expiresAt           DateTime
   usedReservationId   String?      @unique // 振替で取った予約
   note                String?

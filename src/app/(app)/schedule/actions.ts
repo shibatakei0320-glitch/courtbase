@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ReservationStatus, SlotKind } from "@prisma/client";
@@ -272,7 +273,7 @@ export async function sendEventMessage(_: ActionState, fd: FormData): Promise<Ac
   });
   const members = new Map(res.map((r) => [r.member.id, r.member.lineUserId]));
   if (members.size === 0) return { error: "送信先の参加者がいません" };
-  const text = `【${setting?.facilityName ?? "pickleland"}】${slot.title}\n\n${body}`;
+  const text = `【${setting?.facilityName ?? BRAND}】${slot.title}\n\n${body}`;
   let sent = 0;
   for (const lineId of members.values()) if (await pushLine(lineId, text)) sent++;
   await db.eventMessage.create({ data: { slotId, categoryId, body, sentCount: sent, totalCount: members.size, staffId: me.id } });
@@ -293,7 +294,7 @@ export async function sendEntryMessage(_: ActionState, fd: FormData): Promise<Ac
   if (!r) return { error: "エントリーが見つかりません" };
   if (!r.member.lineUserId) return { error: "この会員はLINE未連携のため送信できません" };
   const setting = await db.setting.findUnique({ where: { id: 1 } });
-  const ok = await pushLine(r.member.lineUserId, `【${setting?.facilityName ?? "pickleland"}】${r.slot.title}\n\n${body}`);
+  const ok = await pushLine(r.member.lineUserId, `【${setting?.facilityName ?? BRAND}】${r.slot.title}\n\n${body}`);
   if (!ok) return { error: "送信できませんでした（友だち追加されていない可能性があります）" };
   await db.eventMessage.create({ data: { slotId: r.slotId, categoryId: r.categoryId, body: `［個別：${r.member.lastName} ${r.member.firstName}］${body}`, sentCount: 1, totalCount: 1, staffId: me.id } });
   await audit(me.id, "event.message_one", id);

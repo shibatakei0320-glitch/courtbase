@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fmtDate, fmtDateTime, fmtTime, fmtWeekday } from "@/lib/format";
-import { availableCredits, makeupCandidates } from "@/lib/school";
+import { availableCredits, gradeLabel, makeupCandidates } from "@/lib/school";
 import { AutoRefresh } from "../AutoRefresh";
 import { Templates } from "../Templates";
 import { ContactList, FILTERS, type Filter } from "../ContactList";
@@ -30,7 +30,7 @@ export default async function ThreadPage({ params, searchParams }: { params: Pro
   if (c.unread > 0) await db.lineContact.update({ where: { id }, data: { unread: 0 } });
   const [messages, member] = await Promise.all([
     db.lineMessage.findMany({ where: { contactId: id }, include: { staff: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 200 }),
-    db.member.findUnique({ where: { lineUserId: c.lineUserId }, include: { enrollments: { include: { schoolClass: true } } } }),
+    db.member.findUnique({ where: { lineUserId: c.lineUserId }, include: { children: { where: { status: { not: "WITHDRAWN" } }, orderBy: { birthDate: "asc" } } } }),
   ]);
 
   return (
@@ -95,7 +95,12 @@ export default async function ThreadPage({ params, searchParams }: { params: Pro
         </div>
 
         <div className="space-y-4">
-          {member ? <MemberPanel memberId={member.id} contactId={c.id} /> : <LinkPanel contactId={c.id} q={sp.mq} f={f} />}
+          {member ? (
+            <>
+              <MemberPanel memberId={member.id} contactId={c.id} />
+              {member.children.map((ch) => <MemberPanel key={ch.id} memberId={ch.id} contactId={c.id} child />)}
+            </>
+          ) : <LinkPanel contactId={c.id} q={sp.mq} f={f} />}
           {member && (
             <details className="card p-4 text-sm">
               <summary className="cursor-pointer text-slate-500">会員とのつながりを変更</summary>
@@ -108,7 +113,7 @@ export default async function ThreadPage({ params, searchParams }: { params: Pro
   );
 }
 
-async function MemberPanel({ memberId, contactId }: { memberId: string; contactId: string }) {
+async function MemberPanel({ memberId, contactId, child }: { memberId: string; contactId: string; child?: boolean }) {
   const now = new Date();
   const [m, lessons, credits] = await Promise.all([
     db.member.findUniqueOrThrow({ where: { id: memberId }, include: { enrollments: { include: { schoolClass: true } } } }),
@@ -124,7 +129,8 @@ async function MemberPanel({ memberId, contactId }: { memberId: string; contactI
   const cands = credits[0] ? (await makeupCandidates(memberId, credits[0])).slice(0, 30) : [];
   return (
     <>
-      <div className="card p-4 text-sm">
+      <div className={`card p-4 text-sm ${child ? "border-amber-300" : ""}`}>
+        {child && <p className="mb-1 text-[11px] font-bold text-amber-700">お子さま{gradeLabel(m.birthDate) ? `・${gradeLabel(m.birthDate)}` : ""}</p>}
         <Link href={`/members/${m.id}`} className="font-semibold text-brand-700 hover:underline">{m.lastName} {m.firstName}</Link>
         <span className="ml-2 text-xs text-slate-500">No.{String(m.memberNo).padStart(6, "0")}</span>
         {m.status !== "ACTIVE" && <span className="ml-2"><Badge tone="yellow">休会・退会</Badge></span>}

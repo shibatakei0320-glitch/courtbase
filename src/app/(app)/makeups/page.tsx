@@ -143,6 +143,13 @@ export default async function MakeupsPage({ searchParams }: { searchParams: Prom
                       {levels.map((l) => <option key={l.id} value={l.rank}>{l.name}（{l.rank}）</option>)}
                     </select>
                   </label>
+                  <label className="block"><span className="label">対象のクラス</span>
+                    <select className="input" name="target" defaultValue="">
+                      <option value="">一般・ジュニアどちらでも</option>
+                      <option value="ADULT">一般のみ</option>
+                      <option value="JUNIOR">ジュニアのみ</option>
+                    </select>
+                  </label>
                   <input className="input" name="note" placeholder="メモ（例：雨天中止の補填）" />
                   <Submit className="btn-primary btn-sm">発行</Submit>
                 </ActionForm>

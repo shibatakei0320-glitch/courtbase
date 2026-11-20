@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@prisma/client";
+import type { ClassTarget, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { BookingError } from "./booking";
 import { addDays, fromJst, jstDateKey } from "./format";
@@ -46,6 +46,33 @@ export function enrollmentCovers(e: { startDate: Date; endDate: Date | null }, a
 export function levelAllowed(rule: LevelRule, fromRank: number | null | undefined, toRank: number | null | undefined) {
   if (rule === "ANY" || fromRank == null || toRank == null) return true;
   return rule === "SAME" ? toRank === fromRank : toRank <= fromRank;
+}
+
+/** 一般とジュニアはまたいで振替できない（区分のない権利はどちらにも使える） */
+export function targetAllowed(from: ClassTarget | null | undefined, to: ClassTarget | null | undefined) {
+  return !from || !to || from === to;
+}
+export const TARGET_LABEL: Record<ClassTarget, string> = { ADULT: "一般", JUNIOR: "ジュニア" };
+
+/**
+ * 学年（日本の学校年度：4月2日〜翌4月1日生まれが同じ学年）。
+ * 未就学は 年少・年中・年長、高校生より上は年齢
+ */
+export function gradeLabel(birth: Date | null | undefined, at = new Date()) {
+  if (!birth) return null;
+  const [by, bm, bd] = jstDateKey(birth).split("-").map(Number);
+  const [ay, am] = jstDateKey(at).split("-").map(Number);
+  const cohort = bm > 4 || (bm === 4 && bd >= 2) ? by : by - 1; // 小1になる年 = cohort + 7
+  const schoolYear = am >= 4 ? ay : ay - 1;
+  const g = schoolYear - cohort - 6;
+  if (g >= 1 && g <= 6) return `小${g}`;
+  if (g >= 7 && g <= 9) return `中${g - 6}`;
+  if (g >= 10 && g <= 12) return `高${g - 9}`;
+  if (g === 0) return "年長";
+  if (g === -1) return "年中";
+  if (g === -2) return "年少";
+  if (g > 12) return null;
+  return "未就学";
 }
 
 /** 欠席連絡の期限 */
@@ -163,6 +190,7 @@ export async function recordAbsence(reservationId: string, opts: { reason?: stri
         reason: opts.reason ?? "欠席連絡",
         sourceReservationId: r.id,
         levelRank: r.slot.schoolClass?.level?.rank ?? null,
+        target: r.slot.schoolClass?.target ?? null,
         expiresAt: new Date(r.slot.startsAt.getTime() + makeupValidDays * 86400_000),
         staffId: opts.staffId ?? null,
       },
@@ -205,6 +233,7 @@ export async function bookMakeup(creditId: string, slotId: string, memberId: str
     if (slot.startsAt <= new Date()) throw new BookingError("開始済みの回には振替できません");
     if (slot.startsAt > credit.expiresAt) throw new BookingError("振替の有効期限より後の回です");
     if (!levelAllowed(levelRule, credit.levelRank, slot.schoolClass?.level?.rank)) throw new BookingError("この回のレベルには振替できません");
+    if (!targetAllowed(credit.target, slot.schoolClass?.target)) throw new BookingError(credit.target === "JUNIOR" ? "ジュニアの振替は、ジュニアクラスの回にのみ使えます" : "一般の振替は、一般クラスの回にのみ使えます");
     const dup = await tx.reservation.findFirst({ where: { slotId, memberId, OR: [{ status: ACTIVE }, { kind: "REGULAR" }] } });
     if (dup) throw new BookingError(dup.kind === "REGULAR" ? "在籍しているクラスの回には振替できません（欠席連絡の取り消しをご利用ください）" : "この回はすでに予約済みです");
     const count = await tx.reservation.count({ where: { slotId, status: ACTIVE } });
@@ -254,7 +283,7 @@ export function availableCredits(memberId: string) {
 }
 
 /** 振替先の候補（空きあり・期限内・レベル条件を満たす、まだ予約していない回） */
-export async function makeupCandidates(memberId: string, credit: { levelRank: number | null; expiresAt: Date }) {
+export async function makeupCandidates(memberId: string, credit: { levelRank: number | null; target?: ClassTarget | null; expiresAt: Date }) {
   const { levelRule } = await schoolSettings();
   const slots = await db.slot.findMany({
     where: { classId: { not: null }, status: "OPEN", startsAt: { gt: new Date(), lte: credit.expiresAt } },
@@ -269,6 +298,7 @@ export async function makeupCandidates(memberId: string, credit: { levelRank: nu
   });
   return slots
     .filter((s) => levelAllowed(levelRule, credit.levelRank, s.schoolClass?.level?.rank))
+    .filter((s) => targetAllowed(credit.target, s.schoolClass?.target))
     .filter((s) => !s.reservations.some((r) => r.memberId === memberId))
     .map((s) => ({ ...s, left: s.capacity - s.reservations.filter((r) => r.status === "RESERVED" || r.status === "ATTENDED").length }))
     .filter((s) => s.left > 0);

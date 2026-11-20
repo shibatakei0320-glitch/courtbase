@@ -4,7 +4,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-xl font-bold text-white">P</div>
-          <p className="text-lg font-bold text-slate-800">pickleland 管理画面</p>
+          <p className="text-lg font-bold text-slate-800">48Kテニススクール 管理画面</p>
         </div>
         <div className="card p-6">{children}</div>
       </div>

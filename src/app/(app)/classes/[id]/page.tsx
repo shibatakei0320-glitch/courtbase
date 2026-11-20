@@ -5,7 +5,7 @@ import { Badge, Empty, PageHeader } from "@/components/ui";
 import { canManage, requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fmtDate, fmtWeekday, fmtTime, jstDateKey } from "@/lib/format";
-import { WEEKDAYS, enrollmentCovers, todayKey } from "@/lib/school";
+import { WEEKDAYS, enrollmentCovers, gradeLabel, todayKey } from "@/lib/school";
 import { ClassForm } from "../ClassForm";
 import { GenerateForm } from "../GenerateForm";
 import { endEnrollment, enroll } from "../actions";
@@ -63,6 +63,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
     <>
       <PageHeader title={c.name} back="/classes" />
       <div className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+        <span className="font-semibold">{c.target === "JUNIOR" ? "ジュニア" : "一般"}</span>
         <span>毎週{WEEKDAYS[c.weekday]}曜日 {c.startTime}〜（{c.durationMin}分）</span>
         <span>{c.court.name}</span>
         {c.level && <span>レベル {c.level.name}</span>}
@@ -82,7 +83,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
                 <tbody>
                   {current.map((e) => (
                     <tr key={e.id}>
-                      <td><Link className="text-brand-700 hover:underline" href={`/members/${e.memberId}`}>{e.member.lastName} {e.member.firstName}</Link>{e.member.status !== "ACTIVE" && <span className="ml-1"><Badge tone="yellow">休会</Badge></span>}</td>
+                      <td><Link className="text-brand-700 hover:underline" href={`/members/${e.memberId}`}>{e.member.lastName} {e.member.firstName}</Link>{gradeLabel(e.member.birthDate) && <span className="ml-1 text-xs text-slate-500">{gradeLabel(e.member.birthDate)}</span>}{e.member.status !== "ACTIVE" && <span className="ml-1"><Badge tone="yellow">休会</Badge></span>}</td>
                       <td className="whitespace-nowrap">{fmtDate(e.startDate)}〜{e.endDate ? fmtDate(e.endDate) : ""}{e.startDate > now && <span className="ml-1"><Badge tone="blue">開始前</Badge></span>}</td>
                       <td>
                         <ActionForm action={endEnrollment} className="flex items-center gap-2" confirm="この日を最終回として在籍を終了しますか？以降の出席予定は消えます">

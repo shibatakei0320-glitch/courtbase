@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = { title: { default: "pickleland 管理", template: "%s | pickleland 管理" }, robots: { index: false } };
+export const metadata: Metadata = { title: { default: "48Kテニススクール 管理", template: "%s | 48Kテニススクール 管理" }, robots: { index: false } };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

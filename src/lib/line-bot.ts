@@ -3,6 +3,7 @@ import { db } from "./db";
 import { BookingError } from "./booking";
 import { recordLine, replyMessages, type LineMsg } from "./line-message";
 import { appUrl } from "./url";
+import { familyOf } from "./family";
 import { fmtTime, jstDateKey } from "./format";
 import { WEEKDAYS, absentableLessons, availableCredits, bookMakeup, makeupCandidates, memberReportAbsence } from "./school";
 
@@ -80,31 +81,44 @@ async function linkPrompt() {
   );
 }
 
-/** 1つの操作（postback の data、またはキーワード）に応答する */
+/** 1つの操作（postback の data、またはキーワード）に応答する。保護者は子どもの分も手続きできる */
 export async function botAction(lineUserId: string, data: URLSearchParams): Promise<LineMsg[]> {
   const member = await db.member.findUnique({ where: { lineUserId } });
   if (!member) return [await linkPrompt()];
-  if (member.status !== "ACTIVE") return [text("現在、休会・退会の扱いになっています。スクールにお問い合わせください。", [])];
+  const fam = (await familyOf(member)).filter((m) => m.status === "ACTIVE");
+  if (!fam.length) return [text("現在、休会・退会の扱いになっています。スクールにお問い合わせください。", [])];
+  const famIds = fam.map((m) => m.id);
+  const byId = new Map(fam.map((m) => [m.id, m]));
+  const multi = fam.length > 1;
+  const nameOf = (id: string) => (multi ? `${byId.get(id)?.firstName ?? ""} ` : "");
   const a = data.get("a");
 
   if (a === "absent_menu") {
-    const list = await absentableLessons(member.id, 12);
+    const list = (await Promise.all(fam.map((m) => absentableLessons(m.id, 12)))).flat().sort((x, y) => x.slot.startsAt.getTime() - y.slot.startsAt.getTime()).slice(0, 12);
     if (!list.length) return [text("欠席連絡できるレッスンはありません（在籍クラスの予定がないか、連絡の期限を過ぎています）。")];
-    return [text("お休みするレッスンを選んでください。", list.map((r) => pb(`${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}`, { a: "absent", r: r.id }, `${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)} を欠席`)))];
+    return [
+      text(
+        multi ? "お休みするレッスンを選んでください（お名前・日時）。" : "お休みするレッスンを選んでください。",
+        list.map((r) => pb(`${nameOf(r.memberId)}${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}`, { a: "absent", r: r.id }, `${nameOf(r.memberId)}${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)} を欠席`)),
+      ),
+    ];
   }
   if (a === "absent") {
-    const r = await db.reservation.findFirst({ where: { id: data.get("r") ?? "", memberId: member.id, kind: "REGULAR", status: "RESERVED" }, include: { slot: true } });
+    const r = await db.reservation.findFirst({ where: { id: data.get("r") ?? "", memberId: { in: famIds }, kind: "REGULAR", status: "RESERVED" }, include: { slot: true } });
     if (!r) return [text("この回は欠席連絡できません。")];
-    return [confirm(`${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜\n${r.slot.title}\nを欠席しますか？`, { a: "absent_ok", r: r.id }, "欠席する")];
+    const who = multi || byId.get(r.memberId)?.guardianId ? `${byId.get(r.memberId)?.firstName}さんの\n` : "";
+    return [confirm(`${who}${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜\n${r.slot.title}\nを欠席しますか？`, { a: "absent_ok", r: r.id }, "欠席する")];
   }
   if (a === "absent_ok") {
+    const own = await db.reservation.findFirst({ where: { id: data.get("r") ?? "", memberId: { in: famIds } } });
+    if (!own) return [text("この回は欠席連絡できません。")];
     try {
-      const { reservation: r, credit } = await memberReportAbsence(member.id, data.get("r") ?? "");
+      const { reservation: r, credit } = await memberReportAbsence(own.memberId, own.id);
       await db.auditLog.create({ data: { action: "absence.line", target: r.id } });
       return [
         text(
-          `欠席を受け付けました。\n${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜 ${r.slot.title}\n\n振替が1回分付きました${credit ? `（${jstDateKey(credit.expiresAt).replaceAll("-", "/")}まで）` : ""}。`,
-          [pb("続けて振替を予約", { a: "makeup_menu" }), ...menuItems().slice(0, 1), ...menuItems().slice(2)],
+          `${multi ? `${byId.get(r.memberId)?.firstName}さんの` : ""}欠席を受け付けました。\n${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜 ${r.slot.title}\n\n振替が1回分付きました${credit ? `（${jstDateKey(credit.expiresAt).replaceAll("-", "/")}まで）` : ""}。`,
+          [pb("続けて振替を予約", { a: "makeup_menu", m: r.memberId }), ...menuItems().slice(0, 1), ...menuItems().slice(2)],
         ),
       ];
     } catch (e) {
@@ -113,52 +127,59 @@ export async function botAction(lineUserId: string, data: URLSearchParams): Prom
     }
   }
   if (a === "makeup_menu") {
-    const credits = await availableCredits(member.id);
-    if (!credits.length) return [text("使える振替がありません。レッスンを欠席連絡すると、振替が1回分付きます。")];
-    const credit = credits[0];
-    const slots = (await makeupCandidates(member.id, credit)).slice(0, 12);
-    const head = `使える振替：${credits.length}回（いちばん早い期限 ${jstDateKey(credit.expiresAt).replaceAll("-", "/")}）`;
+    const withCredits = (await Promise.all(fam.map(async (m) => ({ m, credits: await availableCredits(m.id) })))).filter((x) => x.credits.length);
+    if (!withCredits.length) return [text("使える振替がありません。レッスンを欠席連絡すると、振替が1回分付きます。")];
+    const pick = withCredits.find((x) => x.m.id === data.get("m")) ?? (withCredits.length === 1 ? withCredits[0] : null);
+    if (!pick) return [text("どなたの振替を予約しますか？", withCredits.map((x) => pb(`${x.m.firstName}さん（${x.credits.length}回）`, { a: "makeup_menu", m: x.m.id })))];
+    const credit = pick.credits[0];
+    const slots = (await makeupCandidates(pick.m.id, credit)).slice(0, 12);
+    const head = `${multi ? `${pick.m.firstName}さんの` : ""}使える振替：${pick.credits.length}回（いちばん早い期限 ${jstDateKey(credit.expiresAt).replaceAll("-", "/")}）`;
     if (!slots.length) return [text(`${head}\n\nいま空きのある回はありません。空きが出ると、ここから選べるようになります。`)];
     return [
       text(
-        `${head}\n\n振替する回を選んでください（残り席数）。\n一覧はマイページでも見られます：${appUrl()}/my/school/makeup`,
+        `${head}\n\n振替する回を選んでください。\n一覧はマイページでも見られます：${appUrl()}/my/school/makeup?m=${pick.m.id}`,
         slots.map((s) => pb(`${md(s.startsAt)}${fmtTime(s.startsAt)} ${s.title}`, { a: "makeup", c: credit.id, s: s.id }, `${md(s.startsAt)} ${fmtTime(s.startsAt)} ${s.title} に振替`)),
       ),
     ];
   }
   if (a === "makeup") {
     const s = await db.slot.findUnique({ where: { id: data.get("s") ?? "" }, include: { court: true } });
-    if (!s) return [text("この回は見つかりません。")];
-    return [confirm(`${md(s.startsAt)} ${fmtTime(s.startsAt)}〜\n${s.title}（${s.court.name}）\nに振替しますか？`, { a: "makeup_ok", c: data.get("c") ?? "", s: s.id }, "振替する")];
+    const credit = await db.makeupCredit.findFirst({ where: { id: data.get("c") ?? "", memberId: { in: famIds } } });
+    if (!s || !credit) return [text("この回は見つかりません。")];
+    const who = multi ? `${byId.get(credit.memberId)?.firstName}さんを\n` : "";
+    return [confirm(`${who}${md(s.startsAt)} ${fmtTime(s.startsAt)}〜\n${s.title}（${s.court.name}）\nに振替しますか？`, { a: "makeup_ok", c: credit.id, s: s.id }, "振替する")];
   }
   if (a === "makeup_ok") {
+    const credit = await db.makeupCredit.findFirst({ where: { id: data.get("c") ?? "", memberId: { in: famIds } } });
+    if (!credit) return [text("使える振替がありません")];
     try {
-      const r = await bookMakeup(data.get("c") ?? "", data.get("s") ?? "", member.id);
+      const r = await bookMakeup(credit.id, data.get("s") ?? "", credit.memberId);
       const s = await db.slot.findUniqueOrThrow({ where: { id: r.slotId }, include: { court: true } });
       await db.auditLog.create({ data: { action: "makeup.line_book", target: r.id } });
-      return [text(`振替の予約が確定しました。\n${md(s.startsAt)} ${fmtTime(s.startsAt)}〜 ${s.title}\n${s.court.name}\n\n取り消すときはマイページからどうぞ（振替は戻ります）。\n${appUrl()}/my/school`)];
+      return [text(`${multi ? `${byId.get(credit.memberId)?.firstName}さんの` : ""}振替の予約が確定しました。\n${md(s.startsAt)} ${fmtTime(s.startsAt)}〜 ${s.title}\n${s.court.name}\n\n取り消すときはマイページからどうぞ（振替は戻ります）。\n${appUrl()}/my/school?m=${credit.memberId}`)];
     } catch (e) {
-      if (e instanceof BookingError) return [text(e.message, [pb("ほかの回を選ぶ", { a: "makeup_menu" }), ...menuItems()])];
+      if (e instanceof BookingError) return [text(e.message, [pb("ほかの回を選ぶ", { a: "makeup_menu", m: credit.memberId }), ...menuItems()])];
       throw e;
     }
   }
   if (a === "schedule") {
     const now = new Date();
-    const [lessons, credits] = await Promise.all([
-      db.reservation.findMany({
-        where: { memberId: member.id, status: "RESERVED", slot: { status: "OPEN", startsAt: { gt: now, lte: new Date(now.getTime() + 35 * 86400_000) } } },
-        include: { slot: true },
-        orderBy: { slot: { startsAt: "asc" } },
-        take: 10,
-      }),
-      availableCredits(member.id),
-    ]);
-    const lines = lessons.map((r) => `・${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)} ${r.slot.title}${r.kind === "MAKEUP" ? "（振替）" : ""}`);
-    return [
-      text(
-        `${member.lastName}さんのこれからの予定\n${lines.length ? lines.join("\n") : "（5週間以内の予定はありません）"}\n\n使える振替：${credits.length}回${credits[0] ? `（${jstDateKey(credits[0].expiresAt).replaceAll("-", "/")}まで）` : ""}`,
-      ),
-    ];
+    const blocks: string[] = [];
+    for (const m of fam) {
+      const [lessons, credits] = await Promise.all([
+        db.reservation.findMany({
+          where: { memberId: m.id, status: "RESERVED", slot: { status: "OPEN", startsAt: { gt: now, lte: new Date(now.getTime() + 35 * 86400_000) } } },
+          include: { slot: true },
+          orderBy: { slot: { startsAt: "asc" } },
+          take: 8,
+        }),
+        availableCredits(m.id),
+      ]);
+      if (multi && !lessons.length && !credits.length) continue;
+      const lines = lessons.map((r) => `・${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)} ${r.slot.title}${r.kind === "MAKEUP" ? "（振替）" : ""}`);
+      blocks.push(`■ ${m.lastName} ${m.firstName}さん\n${lines.length ? lines.join("\n") : "（5週間以内の予定はありません）"}\n使える振替：${credits.length}回${credits[0] ? `（${jstDateKey(credits[0].expiresAt).replaceAll("-", "/")}まで）` : ""}`);
+    }
+    return [text(`これからの予定\n\n${blocks.join("\n\n") || "（予定はありません）"}`)];
   }
   // menu・その他
   return [text(`${await facilityName()}です。ご用件を選んでください。\nほかのご用件は、このままメッセージを送っていただければスタッフがお返事します。`)];

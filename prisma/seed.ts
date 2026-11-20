@@ -8,7 +8,7 @@ const dayKey = (offset: number) => new Date(Date.now() + 9 * 3600_000 + offset *
 async function main() {
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@example.com";
   const password = process.env.SEED_OWNER_PASSWORD ?? "ChangeMe123";
-  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "pickleland" } });
+  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "48Kテニススクール" } });
   const owner = await db.staff.upsert({
     where: { email },
     update: {},
@@ -58,8 +58,19 @@ async function main() {
     db.schoolClass.create({ data: { name: "初級 土曜10時", planId: fee1.id, levelId: lv1.id, weekday: 6, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
     db.schoolClass.create({ data: { name: "中級 水曜19時", planId: fee2.id, levelId: lv2.id, weekday: 3, startTime: "19:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
   ]);
+  // ジュニア：保護者（佐藤 健太）の子ども2人と、ジュニアクラス
+  const kids = await Promise.all([
+    db.member.create({ data: { lastName: "佐藤", firstName: "陽向", lastKana: "サトウ", firstKana: "ヒナタ", birthDate: jst("2017-06-10", "00:00"), guardianId: members[0].id } }),
+    db.member.create({ data: { lastName: "佐藤", firstName: "結衣", lastKana: "サトウ", firstKana: "ユイ", birthDate: jst("2014-09-03", "00:00"), guardianId: members[0].id } }),
+  ]);
+  const fee3 = await db.plan.create({ data: { name: "ジュニア 週1回", kind: "MONTHLY", price: 7700, sortOrder: 5 } });
+  const lvJ = await db.level.create({ data: { name: "ジュニア", rank: 1, color: "#3b82f6" } });
+  classes.push(
+    await db.schoolClass.create({ data: { name: "ジュニア 水曜16時", target: "JUNIOR", planId: fee3.id, levelId: lvJ.id, weekday: 3, startTime: "16:00", durationMin: 60, courtId: courts[2].id, coachId: coach.id, capacity: 8 } }),
+    await db.schoolClass.create({ data: { name: "ジュニア 金曜16時", target: "JUNIOR", planId: fee3.id, levelId: lvJ.id, weekday: 5, startTime: "16:00", durationMin: 60, courtId: courts[2].id, coachId: coach.id, capacity: 8 } }),
+  );
   const today = jst(dayKey(0), "00:00");
-  const roster = [members.slice(0, 4), members.slice(2, 6), members.slice(4, 8)];
+  const roster = [members.slice(0, 4), members.slice(2, 6), members.slice(4, 8), kids, []];
   for (const [ci, c] of classes.entries()) {
     for (const m of roster[ci]) await db.enrollment.create({ data: { classId: c.id, memberId: m.id, startDate: today } });
     for (let d = 1; d <= 28; d++) {

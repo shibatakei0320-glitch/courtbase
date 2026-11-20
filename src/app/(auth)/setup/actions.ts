@@ -1,4 +1,5 @@
 "use server";
+import { BRAND } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { createSession } from "@/lib/auth";
@@ -8,7 +9,7 @@ import { str, type ActionState } from "@/lib/action";
 
 /** 初回セットアップ: スタッフが0人のときだけ最初のオーナーを作成できる */
 export async function setupOwner(_: ActionState, fd: FormData): Promise<ActionState> {
-  const facilityName = str(fd, "facilityName") || "pickleland";
+  const facilityName = str(fd, "facilityName") || BRAND;
   const name = str(fd, "name");
   const email = str(fd, "email").toLowerCase();
   const pw = str(fd, "password");

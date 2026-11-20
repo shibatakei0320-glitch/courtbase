@@ -7,6 +7,13 @@ export function ClassForm({ c, levels, courts, coaches, plans }: { c?: SchoolCla
   return (
     <ActionForm action={saveClass} className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
+      <fieldset>
+        <span className="label">対象</span>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1.5"><input type="radio" name="target" value="ADULT" defaultChecked={(c?.target ?? "ADULT") === "ADULT"} />一般</label>
+          <label className="flex items-center gap-1.5"><input type="radio" name="target" value="JUNIOR" defaultChecked={c?.target === "JUNIOR"} />ジュニア</label>
+        </div>
+      </fieldset>
       <label className="block"><span className="label">クラス名</span><input className="input" name="name" defaultValue={c?.name} placeholder="例：初級 月曜10時" required /></label>
       <div className="grid grid-cols-2 gap-3">
         <label className="block"><span className="label">曜日</span>

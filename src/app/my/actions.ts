@@ -14,6 +14,7 @@ import { fmtDateTime, fromJst, jstDateKey } from "@/lib/format";
 import { createMemberSession, destroyMemberSession, getLinePending, LINE_PENDING_COOKIE, requireMember } from "@/lib/member-auth";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { appUrl } from "@/lib/url";
+import { familyMember, familyOf } from "@/lib/family";
 import { bookMakeup, cancelMakeup, memberReportAbsence, undoAbsence } from "@/lib/school";
 
 export async function memberLogout() {
@@ -158,7 +159,8 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
 /** 会員による予約キャンセル（期限内のみ。カード払いは全額返金） */
 export async function cancelMyReservation(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, status: "RESERVED" }, include: { slot: true } });
+  const famIds = (await familyOf(me)).map((m) => m.id);
+  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: { in: famIds }, status: "RESERVED" }, include: { slot: true } });
   if (!r) return { error: "キャンセルできる予約がありません" };
   if (r.kind === "REGULAR") return { error: "クラスの回は「欠席連絡」からお休みしてください" };
   const { at, hours } = await cancelDeadline(r.slot.startsAt);
@@ -172,7 +174,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
     }
     await audit(null, "makeup.member_cancel", r.id);
     await notifyMakeupCanceled(r.id);
-    redirect("/my/school?makeupCanceled=1");
+    redirect(`/my/school?m=${r.memberId}&makeupCanceled=1`);
   }
   try {
     await cancelReservation(r.id);
@@ -303,24 +305,27 @@ export async function leaveWaitlist(_: ActionState, fd: FormData): Promise<Actio
 /** 欠席連絡（期限内なら振替の権利が付く） */
 export async function reportAbsence(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
+  const famIds = (await familyOf(me)).map((m) => m.id);
+  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: { in: famIds } } });
+  if (!r) return { error: "欠席連絡できる回がありません" };
   let credit;
   try {
-    credit = (await memberReportAbsence(me.id, str(fd, "id"))).credit;
+    credit = (await memberReportAbsence(r.memberId, r.id)).credit;
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };
     throw e;
   }
-  await audit(null, "absence.member", str(fd, "id"));
-  await notifyAbsence(str(fd, "id"), credit?.expiresAt ?? null);
-  revalidatePath("/my/school");
-  revalidatePath("/my");
+  await audit(null, "absence.member", r.id);
+  await notifyAbsence(r.id, credit?.expiresAt ?? null);
+  revalidatePath("/my", "layout");
   return { ok: "欠席を受け付けました。振替が1回分付きました" };
 }
 
 /** 欠席連絡の取り消し（振替を使っておらず、席が空いている場合） */
 export async function undoMyAbsence(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, kind: "REGULAR" } });
+  const famIds = (await familyOf(me)).map((m) => m.id);
+  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: { in: famIds }, kind: "REGULAR" } });
   if (!r) return { error: "取り消せる欠席連絡がありません" };
   try {
     await undoAbsence(r.id);
@@ -329,18 +334,19 @@ export async function undoMyAbsence(_: ActionState, fd: FormData): Promise<Actio
     throw e;
   }
   await audit(null, "absence.member_undo", r.id);
-  revalidatePath("/my/school");
-  revalidatePath("/my");
+  revalidatePath("/my", "layout");
   return { ok: "欠席連絡を取り消しました。いつもどおり出席の予定です" };
 }
 
-/** 振替の予約 */
+/** 振替の予約（本人または子ども） */
 export async function bookMyMakeup(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。スクールにお問い合わせください" };
+  const who = await familyMember(me, str(fd, "memberId"));
+  if (!who) return { error: "会員が見つかりません" };
+  if (who.status !== "ACTIVE") return { error: "現在予約できません（休会中）。スクールにお問い合わせください" };
   let id: string;
   try {
-    const r = await bookMakeup(str(fd, "creditId"), str(fd, "slotId"), me.id);
+    const r = await bookMakeup(str(fd, "creditId"), str(fd, "slotId"), who.id);
     id = r.id;
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };
@@ -348,5 +354,34 @@ export async function bookMyMakeup(_: ActionState, fd: FormData): Promise<Action
   }
   await audit(null, "makeup.member_book", id);
   await notifyBooked(id);
-  redirect("/my/school?booked=1");
+  redirect(`/my/school?m=${who.id}&booked=1`);
+}
+
+/** 保護者がお子さまを会員として登録する（クラスへの在籍はスクールが登録） */
+export async function addChild(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  if (me.guardianId) return { error: "保護者の方のアカウントから登録してください" };
+  const lastName = str(fd, "lastName") || me.lastName;
+  const firstName = str(fd, "firstName");
+  const birth = str(fd, "birthDate");
+  if (!firstName) return { error: "お子さまのお名前を入力してください" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birth)) return { error: "生年月日を入力してください" };
+  const dup = await db.member.findFirst({ where: { guardianId: me.id, lastName, firstName } });
+  if (dup) return { error: "このお子さまはすでに登録されています" };
+  const child = await db.member.create({
+    data: {
+      guardianId: me.id,
+      lastName,
+      firstName,
+      lastKana: optStr(fd, "lastKana") ?? me.lastKana,
+      firstKana: optStr(fd, "firstKana"),
+      birthDate: fromJst(birth),
+      gender: optStr(fd, "gender"),
+      phone: me.phone,
+      note: "保護者が会員ページから登録",
+    },
+  });
+  await audit(null, "member.child_register", child.id, `${lastName} ${firstName}（保護者 ${me.lastName} ${me.firstName}）`);
+  revalidatePath("/my", "layout");
+  return { ok: `${firstName}さんを登録しました。クラスのお申し込みはスクールにご連絡ください` };
 }

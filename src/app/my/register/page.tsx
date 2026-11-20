@@ -5,9 +5,9 @@ import { registerMember } from "../actions";
 
 export const metadata = { title: "会員登録" };
 
-const field = "mt-2 block w-full border-0 border-b border-[#13201A]/20 bg-transparent px-0 py-2 text-base text-[#13201A] placeholder:text-[#13201A]/30 focus:border-[#0F3D2E] focus:outline-none focus:ring-0";
-const label = "block text-xs text-[#13201A]/60";
-const opt = <span className="ml-1 text-[#13201A]/40">任意</span>;
+const field = "mt-2 block w-full border-0 border-b border-[#1A2420]/20 bg-transparent px-0 py-2 text-base text-[#1A2420] placeholder:text-[#1A2420]/30 focus:border-[#0B6B4F] focus:outline-none focus:ring-0";
+const label = "block text-xs text-[#1A2420]/60";
+const opt = <span className="ml-1 text-[#1A2420]/40">任意</span>;
 
 export default async function RegisterPage() {
   if (await getCurrentMember()) redirect("/my");
@@ -17,7 +17,7 @@ export default async function RegisterPage() {
     <div className="space-y-8 pt-2">
       <div className="px-1">
         <h1 className="text-2xl font-medium tracking-wide">会員登録</h1>
-        <p className="mt-2 text-sm text-[#13201A]/60">{pending.name ? `${pending.name}さんのLINEと連携します。` : "LINEと連携して登録します。"}</p>
+        <p className="mt-2 text-sm text-[#1A2420]/60">{pending.name ? `${pending.name}さんのLINEと連携します。` : "LINEと連携して登録します。"}</p>
       </div>
       <div className="rounded-2xl bg-white px-6 py-7">
         <ActionForm action={registerMember} className="space-y-7">
@@ -30,13 +30,13 @@ export default async function RegisterPage() {
           <label className={label}>電話番号<input className={field} type="tel" name="phone" required autoComplete="tel" placeholder="090-1234-5678" /></label>
           <label className={label}>メールアドレス{opt}
             <input className={field} type="email" name="email" autoComplete="email" />
-            <span className="mt-2 block text-[#13201A]/45">カード決済の領収書の送り先になります。</span>
+            <span className="mt-2 block text-[#1A2420]/45">カード決済の領収書の送り先になります。</span>
           </label>
           <label className="flex items-start gap-3 text-sm">
-            <input type="checkbox" name="agree" value="1" required className="mt-0.5 h-4 w-4 accent-[#0F3D2E]" />
+            <input type="checkbox" name="agree" value="1" required className="mt-0.5 h-4 w-4 accent-[#0B6B4F]" />
             <span><a href="/my/legal/terms" target="_blank" className="underline underline-offset-2">利用規約</a>と<a href="/my/legal/privacy" target="_blank" className="underline underline-offset-2">プライバシーポリシー</a>に同意します</span>
           </label>
-          <Submit className="w-full rounded-xl bg-[#0F3D2E] py-4 text-sm font-bold text-white transition hover:bg-[#0B2F23] active:scale-[0.99] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+          <Submit className="w-full rounded-xl bg-[#0B6B4F] py-4 text-sm font-bold text-white transition hover:bg-[#08553F] active:scale-[0.99] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B4F]">
             登録する
           </Submit>
         </ActionForm>

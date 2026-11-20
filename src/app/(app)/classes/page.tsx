@@ -49,7 +49,7 @@ export default async function ClassesPage() {
                     return (
                       <tr key={c.id} className={c.active ? "" : "opacity-50"}>
                         <td className="whitespace-nowrap">{c.startTime}〜（{c.durationMin}分）</td>
-                        <td><Link href={`/classes/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>{!c.active && <span className="ml-2"><Badge>停止</Badge></span>}</td>
+                        <td>{c.target === "JUNIOR" && <span className="mr-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">ジュニア</span>}<Link href={`/classes/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>{!c.active && <span className="ml-2"><Badge>停止</Badge></span>}</td>
                         <td>{c.level ? <span className="whitespace-nowrap"><span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: c.level.color }} />{c.level.name}</span> : "-"}</td>
                         <td>{c.court.name}</td>
                         <td>{c.coach?.name ?? "-"}</td>

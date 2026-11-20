@@ -45,6 +45,7 @@ export async function saveClass(_: ActionState, fd: FormData): Promise<ActionSta
     levelId: optStr(fd, "levelId"),
     coachId: optStr(fd, "coachId"),
     planId: optStr(fd, "planId"),
+    target: str(fd, "target") === "JUNIOR" ? ("JUNIOR" as const) : ("ADULT" as const),
     durationMin: Math.min(600, Math.max(15, int(fd, "durationMin", 90))),
     capacity: Math.max(1, int(fd, "capacity", 8)),
     description: optStr(fd, "description"),
@@ -225,7 +226,8 @@ export async function issueCredit(_: ActionState, fd: FormData): Promise<ActionS
   const levelRank = str(fd, "levelRank") === "" ? null : int(fd, "levelRank");
   const expiresAt = new Date(fromJst(addDays(exp, 1)).getTime() - 1);
   for (let i = 0; i < count; i++) {
-    await db.makeupCredit.create({ data: { memberId, reason: "手動発行", note: optStr(fd, "note"), levelRank, expiresAt, staffId: me.id } });
+    const target = str(fd, "target") === "JUNIOR" ? "JUNIOR" : str(fd, "target") === "ADULT" ? "ADULT" : null;
+    await db.makeupCredit.create({ data: { memberId, reason: "手動発行", note: optStr(fd, "note"), levelRank, target, expiresAt, staffId: me.id } });
   }
   await audit(me.id, "makeup.issue", memberId, `${count}件 〜${exp}`);
   revalidatePath("/makeups");

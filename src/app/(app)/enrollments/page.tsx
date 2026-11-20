@@ -3,7 +3,7 @@ import { Badge, Empty, PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fmtDate, yen } from "@/lib/format";
-import { WEEKDAYS, monthKey } from "@/lib/school";
+import { WEEKDAYS, gradeLabel, monthKey } from "@/lib/school";
 import { isMonth, monthLabel, monthRange, shiftMonth } from "@/lib/tuition";
 
 export const metadata = { title: "在籍台帳" };
@@ -80,6 +80,7 @@ export default async function EnrollmentsPage({ searchParams }: { searchParams: 
                     <tr key={m.id}>
                       <td className="whitespace-nowrap">
                         <Link className="text-brand-700 hover:underline" href={`/members/${m.id}`}>{m.lastName} {m.firstName}</Link>
+                        {gradeLabel(m.birthDate) && <span className="ml-1 text-xs text-slate-500">{gradeLabel(m.birthDate)}</span>}
                         {onLeave.has(m.id) && <span className="ml-1"><Badge tone="yellow">休会</Badge></span>}
                         {m.status !== "ACTIVE" && <span className="ml-1"><Badge tone="red">{m.status === "SUSPENDED" ? "停止" : "退会"}</Badge></span>}
                       </td>
