@@ -42,14 +42,14 @@ export default async function ClassesPage() {
             <div key={d.i} className="card overflow-x-auto">
               <h2 className="border-b px-4 py-3 font-semibold">{d.w}曜日</h2>
               <table className="table">
-                <thead><tr><th>時間</th><th>クラス</th><th>レベル</th><th>コート</th><th>コーチ</th><th>月謝</th><th>在籍</th><th>回の作成済み</th></tr></thead>
+                <thead><tr><th>時間</th><th>クラス</th><th>レベル</th><th>コート</th><th>コーチ</th><th>月謝</th><th>在籍</th><th>回の作成</th></tr></thead>
                 <tbody>
                   {d.list.map((c) => {
                     const n = c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now).length;
                     return (
                       <tr key={c.id} className={c.active ? "" : "opacity-50"}>
                         <td className="whitespace-nowrap">{c.startTime}〜（{c.durationMin}分）</td>
-                        <td>{c.target === "JUNIOR" && <span className="mr-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">ジュニア</span>}<Link href={`/classes/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>{!c.active && <span className="ml-2"><Badge>停止</Badge></span>}</td>
+                        <td className="!whitespace-normal">{c.target === "JUNIOR" && <span className="mb-0.5 block w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800">ジュニア</span>}<Link href={`/classes/${c.id}`} className="font-medium text-brand-700 hover:underline">{c.name}</Link>{!c.active && <span className="ml-2"><Badge>停止</Badge></span>}</td>
                         <td>{c.level ? <span className="whitespace-nowrap"><span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: c.level.color }} />{c.level.name}</span> : "-"}</td>
                         <td>{c.court.name}</td>
                         <td>{c.coach?.name ?? "-"}</td>
