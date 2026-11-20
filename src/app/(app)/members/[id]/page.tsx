@@ -25,13 +25,14 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   });
   if (!member) notFound();
   const plans = await db.plan.findMany({ orderBy: { sortOrder: "asc" } });
+  const contact = member.lineUserId ? await db.lineContact.findUnique({ where: { lineUserId: member.lineUserId } }) : null;
   const total = member.payments.reduce((s, p) => s + p.amount, 0);
   return (
     <>
       <PageHeader
         title={`${member.lastName} ${member.firstName}`}
         back="/members"
-        actions={<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link>}
+        actions={<>{contact && <Link className="btn-secondary" href={`/inbox/${contact.id}?f=all`}>LINEの会話</Link>}<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link></>}
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="会員番号" value={String(member.memberNo).padStart(6, "0")} />

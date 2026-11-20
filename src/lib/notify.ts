@@ -28,6 +28,10 @@ function body(r: NonNullable<Awaited<ReturnType<typeof load>>>["r"]) {
 export async function notifyBooked(reservationId: string, amount = 0) {
   const x = await load(reservationId);
   if (!x) return;
+  if (x.r.kind === "MAKEUP") {
+    await pushLine(x.r.member.lineUserId, `【${x.name}】振替の予約が確定しました\n\n${body(x.r)}\n\n取り消すと振替は戻ります。\n${appUrl()}/my/school`);
+    return;
+  }
   await pushLine(
     x.r.member.lineUserId,
     `【${x.name}】予約が確定しました\n\n${body(x.r)}${amount > 0 ? `\n料金 ${yen(amount)}（お支払い済み）` : ""}\n\n入退場の際は会員証のQRコードを受付でお見せください。\n${appUrl()}/my/card`,
@@ -72,4 +76,27 @@ export async function notifyWaitlist(categoryId: string) {
   }
   await db.waitlist.updateMany({ where: { categoryId }, data: { notifiedAt: new Date() } });
   return sent;
+}
+
+// ---- スクール ----
+
+/** 欠席連絡の受付（Web・スタッフ受付のとき。LINEからの欠席はその場で応答する） */
+export async function notifyAbsence(reservationId: string, creditExpires: Date | null) {
+  const x = await load(reservationId);
+  if (!x) return;
+  const credit = creditExpires ? `\n\n振替が1回分付きました（${jstDateKey(creditExpires).replaceAll("-", "/")}まで）。「振替予約」から空きのある回を選べます。` : "";
+  await pushLine(x.r.member.lineUserId, `【${x.name}】欠席を受け付けました\n\n${body(x.r)}${credit}`);
+}
+
+export async function notifyMakeupCanceled(reservationId: string) {
+  const x = await load(reservationId);
+  if (!x) return;
+  await pushLine(x.r.member.lineUserId, `【${x.name}】振替の予約を取り消しました\n\n${body(x.r)}\n\n振替は戻っています。別の回を選べます。`);
+}
+
+/** 休講のお知らせ（在籍者・振替予定者） */
+export async function notifyLessonCanceled(reservationId: string) {
+  const x = await load(reservationId);
+  if (!x) return;
+  await pushLine(x.r.member.lineUserId, `【${x.name}】次のレッスンは休講になりました。申し訳ありません。\n\n${body(x.r)}\n\n振替が1回分付いています。「振替予約」から空きのある回を選べます。\n${appUrl()}/my/school`);
 }

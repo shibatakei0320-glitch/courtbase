@@ -8,13 +8,13 @@ import { int, str, optStr, type ActionState } from "@/lib/action";
 import { BookingError, book, bookEntry, cancelDeadline, cancelReservation } from "@/lib/booking";
 import { categoryLabel, currentPrice, parseEntry } from "@/lib/entry";
 import { refundReservation } from "@/lib/refund";
-import { notifyBooked, notifyCanceled, notifyWaitlist } from "@/lib/notify";
+import { notifyAbsence, notifyBooked, notifyCanceled, notifyMakeupCanceled, notifyWaitlist } from "@/lib/notify";
 import { ADVANCE_DAYS, MAX_MIN, STEP_MIN, clearExpiredHolds, courtPrice, overlapsAny } from "@/lib/court-booking";
 import { fmtDateTime, fromJst, jstDateKey } from "@/lib/format";
 import { createMemberSession, destroyMemberSession, getLinePending, LINE_PENDING_COOKIE, requireMember } from "@/lib/member-auth";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { appUrl } from "@/lib/url";
-import { absenceDeadline, bookMakeup, cancelMakeup, recordAbsence, schoolSettings, undoAbsence } from "@/lib/school";
+import { bookMakeup, cancelMakeup, memberReportAbsence, undoAbsence } from "@/lib/school";
 
 export async function memberLogout() {
   await destroyMemberSession();
@@ -171,6 +171,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
       throw e;
     }
     await audit(null, "makeup.member_cancel", r.id);
+    await notifyMakeupCanceled(r.id);
     redirect("/my/school?makeupCanceled=1");
   }
   try {
@@ -302,19 +303,15 @@ export async function leaveWaitlist(_: ActionState, fd: FormData): Promise<Actio
 /** 欠席連絡（期限内なら振替の権利が付く） */
 export async function reportAbsence(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireMember();
-  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, kind: "REGULAR", status: "RESERVED" }, include: { slot: true } });
-  if (!r) return { error: "欠席連絡できる回がありません" };
-  const { absenceDeadlineHours } = await schoolSettings();
-  const at = absenceDeadline(r.slot.startsAt, absenceDeadlineHours);
-  if (Date.now() > at.getTime())
-    return { error: `欠席連絡の期限（${absenceDeadlineHours > 0 ? `開始の${absenceDeadlineHours}時間前` : "開始時刻"}）を過ぎています。スクールに直接ご連絡ください` };
+  let credit;
   try {
-    await recordAbsence(r.id);
+    credit = (await memberReportAbsence(me.id, str(fd, "id"))).credit;
   } catch (e) {
     if (e instanceof BookingError) return { error: e.message };
     throw e;
   }
-  await audit(null, "absence.member", r.id);
+  await audit(null, "absence.member", str(fd, "id"));
+  await notifyAbsence(str(fd, "id"), credit?.expiresAt ?? null);
   revalidatePath("/my/school");
   revalidatePath("/my");
   return { ok: "欠席を受け付けました。振替が1回分付きました" };

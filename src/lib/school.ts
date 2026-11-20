@@ -210,7 +210,9 @@ export async function cancelLesson(slotId: string, staffId: string | null) {
   await db.slot.update({ where: { id: slotId }, data: { status: "CANCELED" } });
   const list = await db.reservation.findMany({ where: { slotId, status: "RESERVED" } });
   let credited = 0;
+  const notified: string[] = [];
   for (const r of list) {
+    if (r.kind !== "NORMAL") notified.push(r.id);
     if (r.kind === "REGULAR") {
       await recordAbsence(r.id, { reason: "休講", staffId });
       credited++;
@@ -221,7 +223,7 @@ export async function cancelLesson(slotId: string, staffId: string | null) {
       await db.reservation.update({ where: { id: r.id }, data: { status: "CANCELED", canceledAt: new Date() } });
     }
   }
-  return { affected: list.length, credited };
+  return { affected: list.length, credited, notified };
 }
 
 /** 会員の使える振替の権利（期限の近い順） */
@@ -252,4 +254,29 @@ export async function makeupCandidates(memberId: string, credit: { levelRank: nu
 
 export function todayKey() {
   return jstDateKey(new Date());
+}
+
+/** 会員本人による欠席連絡（期限を確認してから記録し、振替の権利を返す） */
+export async function memberReportAbsence(memberId: string, reservationId: string) {
+  const r = await db.reservation.findFirst({ where: { id: reservationId, memberId, kind: "REGULAR" }, include: { slot: true } });
+  if (!r) throw new BookingError("欠席連絡できる回がありません");
+  if (r.status !== "RESERVED") throw new BookingError("この回はすでに欠席連絡済みです");
+  if (r.slot.status !== "OPEN") throw new BookingError("この回は休講です（振替は付与済みです）");
+  const { absenceDeadlineHours } = await schoolSettings();
+  if (Date.now() > absenceDeadline(r.slot.startsAt, absenceDeadlineHours).getTime())
+    throw new BookingError(`欠席連絡の期限（${absenceDeadlineHours > 0 ? `開始の${absenceDeadlineHours}時間前` : "開始時刻"}）を過ぎています。スクールに直接ご連絡ください`);
+  const credit = await recordAbsence(r.id);
+  return { reservation: r, credit };
+}
+
+/** 欠席連絡できるこれからの回（在籍クラスの出席予定、期限内のもの） */
+export async function absentableLessons(memberId: string, limit = 10) {
+  const { absenceDeadlineHours } = await schoolSettings();
+  const list = await db.reservation.findMany({
+    where: { memberId, kind: "REGULAR", status: "RESERVED", slot: { status: "OPEN", startsAt: { gt: new Date() } } },
+    include: { slot: true },
+    orderBy: { slot: { startsAt: "asc" } },
+    take: limit + 5,
+  });
+  return list.filter((r) => Date.now() <= absenceDeadline(r.slot.startsAt, absenceDeadlineHours).getTime()).slice(0, limit);
 }

@@ -78,12 +78,13 @@ model Staff {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  sessions    Session[]
-  resetTokens PasswordResetToken[]
-  slots       Slot[]               @relation("Instructor")
-  classes     SchoolClass[]        @relation("Coach")
-  payments    Payment[]
-  auditLogs   AuditLog[]
+  sessions     Session[]
+  resetTokens  PasswordResetToken[]
+  slots        Slot[]               @relation("Instructor")
+  classes      SchoolClass[]        @relation("Coach")
+  payments     Payment[]
+  auditLogs    AuditLog[]
+  lineMessages LineMessage[]
 }
 
 model Session {
@@ -459,4 +460,44 @@ model MakeupCredit {
   createdAt           DateTime     @default(now())
 
   @@index([memberId, status])
+}
+
+enum LineDirection {
+  IN
+  OUT
+}
+
+/// LINE公式アカウントの相手（友だち）。会員とは lineUserId で対応づける
+model LineContact {
+  id            String    @id @default(cuid())
+  lineUserId    String    @unique
+  displayName   String?
+  pictureUrl    String?
+  followed      Boolean   @default(true)
+  needsReply    Boolean   @default(false) // 要対応
+  unread        Int       @default(0)
+  lastMessageAt DateTime?
+  lastText      String?
+  createdAt     DateTime  @default(now())
+
+  messages LineMessage[]
+
+  @@index([lastMessageAt])
+}
+
+/// LINEのやりとり（受信・自動応答・通知・スタッフの返信）
+model LineMessage {
+  id            String        @id @default(cuid())
+  contactId     String
+  contact       LineContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  direction     LineDirection
+  type          String // text | image | sticker | file | postback | follow | unfollow | other
+  text          String
+  auto          Boolean       @default(false) // 自動応答・システム通知
+  lineMessageId String?       @unique
+  staffId       String?
+  staff         Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+
+  @@index([contactId, createdAt])
 }

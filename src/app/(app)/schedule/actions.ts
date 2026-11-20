@@ -14,7 +14,7 @@ import { addDays, fromJst, yen } from "@/lib/format";
 import { knockout, league, shuffle } from "@/lib/draw";
 import { refundReservation } from "@/lib/refund";
 import { clearExpiredHolds } from "@/lib/court-booking";
-import { notifyBooked, notifyCanceled, notifyWaitlist } from "@/lib/notify";
+import { notifyAbsence, notifyBooked, notifyCanceled, notifyLessonCanceled, notifyMakeupCanceled, notifyWaitlist } from "@/lib/notify";
 import { cancelLesson, cancelMakeup, recordAbsence, undoAbsence } from "@/lib/school";
 
 async function overlaps(courtId: string, start: Date, end: Date, excludeId?: string) {
@@ -87,6 +87,7 @@ export async function cancelSlot(_: ActionState, fd: FormData): Promise<ActionSt
   const target = await db.slot.findUnique({ where: { id }, select: { classId: true } });
   if (target?.classId) {
     const r = await cancelLesson(id, me.id);
+    for (const rid of r.notified) await notifyLessonCanceled(rid);
     await audit(me.id, "slot.cancel", id, `休講 振替${r.credited}件`);
     revalidatePath(`/schedule/${id}`);
     return { ok: `休講にしました（${r.credited}名に振替の権利を発行・返却）` };
@@ -152,10 +153,12 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   try {
     const cur = await db.reservation.findUnique({ where: { id } });
     if (status === "CANCELED" && cur?.kind === "REGULAR") {
-      await recordAbsence(id, { reason: "欠席連絡（スタッフ受付）", staffId: me.id });
+      const credit = await recordAbsence(id, { reason: "欠席連絡（スタッフ受付）", staffId: me.id });
+      await notifyAbsence(id, credit?.expiresAt ?? null);
       msg = "欠席にし、振替の権利を発行しました";
     } else if (status === "CANCELED" && cur?.kind === "MAKEUP") {
       await cancelMakeup(id);
+      await notifyMakeupCanceled(id);
       msg = "振替を取り消し、振替の権利を会員に戻しました";
     } else if (status === "RESERVED" && cur?.kind === "REGULAR" && cur.status === "CANCELED") {
       await undoAbsence(id);
