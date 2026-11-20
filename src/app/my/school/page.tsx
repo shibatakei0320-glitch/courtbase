@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import { ActionForm, Submit } from "@/components/ActionForm";
-import { fmtDate, fmtDateTime } from "@/lib/format";
+import { fmtDate, fmtDateTime, jstDateKey, yen } from "@/lib/format";
 import { LEVEL_RULE, WEEKDAYS, absenceDeadline, enrollmentCovers, schoolSettings } from "@/lib/school";
 import { reportAbsence, undoMyAbsence } from "../actions";
 import { Notice, hm, jst } from "../ui";
@@ -23,6 +23,10 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
       orderBy: { slot: { startsAt: "asc" } },
     }),
     db.makeupCredit.findMany({ where: { memberId: me.id, status: "AVAILABLE", expiresAt: { gt: now } }, orderBy: { expiresAt: "asc" } }),
+  ]);
+  const [invoices, leaves] = await Promise.all([
+    db.invoice.findMany({ where: { memberId: me.id, status: { not: "VOID" } }, orderBy: { month: "desc" }, take: 3 }),
+    db.leave.findMany({ where: { memberId: me.id, toMonth: { gte: jstDateKey(now).slice(0, 7) } }, orderBy: { fromMonth: "asc" } }),
   ]);
   const current = enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now);
   // 振替予約中の回の行も、キャンセル済みの振替は出さない
@@ -126,6 +130,24 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
           </ul>
         )}
       </section>
+
+      {(invoices.length > 0 || leaves.length > 0) && (
+        <section>
+          <h2 className="mb-2 px-1 text-sm font-bold">月謝</h2>
+          {leaves.map((l) => <p key={l.id} className="mb-2 px-1 text-xs text-[#B4371F]">{l.fromMonth.replace("-", "年")}月〜{l.toMonth.replace("-", "年")}月は休会です</p>)}
+          <ul className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10 text-sm">
+            {invoices.map((i) => (
+              <li key={i.id} className="flex items-baseline justify-between gap-4 px-1 py-3">
+                <span>{Number(i.month.slice(5))}月分</span>
+                <span className="flex items-baseline gap-3">
+                  <span className="font-display text-xl font-medium">{yen(i.amount)}</span>
+                  <span className={`text-xs ${i.status === "PAID" ? "text-[#0F3D2E]" : "text-[#B4371F]"}`}>{i.status === "PAID" ? "お支払い済み" : "未払い"}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {credits.length > 0 && (
         <section>

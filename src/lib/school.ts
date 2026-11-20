@@ -96,12 +96,12 @@ export async function syncClassReservations(classId: string, memberId?: string) 
       where: { classId, status: "OPEN", startsAt: { gt: now } },
       include: { reservations: { where: memberId ? { memberId } : {}, select: { id: true, memberId: true, kind: true, status: true } } },
     }),
-    db.enrollment.findMany({ where: { classId, ...(memberId ? { memberId } : {}), member: { status: "ACTIVE" } } }),
+    db.enrollment.findMany({ where: { classId, ...(memberId ? { memberId } : {}), member: { status: "ACTIVE" } }, include: { member: { select: { leaves: true } } } }),
   ]);
   let added = 0;
   let removed = 0;
   for (const s of slots) {
-    const want = new Set(enrollments.filter((e) => enrollmentCovers(e, s.startsAt)).map((e) => e.memberId));
+    const want = new Set(enrollments.filter((e) => enrollmentCovers(e, s.startsAt) && !onLeave(e.member.leaves, s.startsAt)).map((e) => e.memberId));
     for (const m of want) {
       const has = s.reservations.some((r) => r.memberId === m && (r.kind === "REGULAR" || r.status === "RESERVED" || r.status === "ATTENDED"));
       if (!has) {
@@ -115,6 +115,28 @@ export async function syncClassReservations(classId: string, memberId?: string) 
         removed++;
       }
     }
+  }
+  return { added, removed };
+}
+
+/** JSTの年月 "YYYY-MM" */
+export const monthKey = (d: Date) => jstDateKey(d).slice(0, 7);
+
+/** 休会中か（月単位、両端含む） */
+export function onLeave(leaves: { fromMonth: string; toMonth: string }[], at: Date) {
+  const m = monthKey(at);
+  return leaves.some((l) => l.fromMonth <= m && m <= l.toMonth);
+}
+
+/** 会員の在籍クラスすべてについて出席予定をそろえる（休会・在籍変更の後に呼ぶ） */
+export async function syncMember(memberId: string) {
+  const classIds = [...new Set((await db.enrollment.findMany({ where: { memberId }, select: { classId: true } })).map((e) => e.classId))];
+  let added = 0;
+  let removed = 0;
+  for (const id of classIds) {
+    const r = await syncClassReservations(id, memberId);
+    added += r.added;
+    removed += r.removed;
   }
   return { added, removed };
 }

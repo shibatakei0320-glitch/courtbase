@@ -11,7 +11,7 @@ export const metadata = { title: "施設設定" };
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", admissionFee: 0, leaveFee: 0, prorateMidMonth: true, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />
@@ -41,6 +41,13 @@ export default async function SettingsPage() {
               {Object.entries(LEVEL_RULE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <div className="mt-4 border-t pt-6 sm:col-span-2">
+            <h2 className="font-semibold">月謝</h2>
+            <p className="mt-1 text-xs text-slate-500">クラスごとの月謝は、クラスの設定で月額プランを選びます。</p>
+          </div>
+          <label className="block"><span className="label">入会金（円）</span><input className="input" type="number" min={0} name="admissionFee" defaultValue={s.admissionFee} /><span className="mt-1 block text-xs text-slate-500">初めての月謝に加算。0なら請求しません</span></label>
+          <label className="block"><span className="label">休会費（円／月）</span><input className="input" type="number" min={0} name="leaveFee" defaultValue={s.leaveFee} /></label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="prorateMidMonth" defaultChecked={s.prorateMidMonth} />月の途中の入会・退会・クラス変更は、その月のレッスン回数で按分する（オフなら満額）</label>
           <div className="mt-4 border-t pt-6 sm:col-span-2">
             <h2 className="font-semibold">特定商取引法に基づく表記</h2>
             <p className="mt-1 text-xs text-slate-500">カード決済の本番利用に必要です。空欄の項目は「請求があった場合には遅滞なく開示いたします」と表示されます（個人事業の場合に認められている書き方です）。<a className="text-brand-700 underline" href="/my/legal/tokushoho" target="_blank">表示を確認</a></p>

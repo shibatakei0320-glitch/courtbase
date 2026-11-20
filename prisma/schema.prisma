@@ -137,6 +137,8 @@ model Member {
   waitlists    Waitlist[]
   enrollments  Enrollment[]
   credits      MakeupCredit[]
+  leaves       Leave[]
+  invoices     Invoice[]
 }
 
 model MemberSession {
@@ -161,6 +163,7 @@ model Plan {
 
   members  Member[]
   payments Payment[]
+  classes  SchoolClass[]
 }
 
 model Court {
@@ -291,6 +294,10 @@ model Setting {
   absenceDeadlineHours Int     @default(0) // 欠席連絡の期限（開始の何時間前まで。0=開始まで）
   makeupValidDays      Int     @default(60) // 振替の有効期限（欠席したレッスン日から何日）
   makeupLevelRule      String  @default("SAME_OR_LOWER") // SAME | SAME_OR_LOWER | ANY
+  // 月謝
+  admissionFee         Int     @default(0) // 入会金（初めての月謝に加算）
+  leaveFee             Int     @default(0) // 休会費（休会中の月）
+  prorateMidMonth      Boolean @default(true) // 月の途中の入会・退会は回数で按分
   facilityMode         Boolean @default(false) // 施設の予約・入退場（QR）を使う
   // 特定商取引法に基づく表記
   legalSeller          String?
@@ -420,6 +427,8 @@ model SchoolClass {
   court       Court    @relation(fields: [courtId], references: [id], onDelete: Restrict)
   coachId     String?
   coach       Staff?   @relation("Coach", fields: [coachId], references: [id], onDelete: SetNull)
+  planId      String? // 月謝（月額プラン）
+  plan        Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
   capacity    Int      @default(8)
   description String?
   active      Boolean  @default(true)
@@ -500,4 +509,42 @@ model LineMessage {
   createdAt     DateTime      @default(now())
 
   @@index([contactId, createdAt])
+}
+
+/// 休会（月単位。期間中は在籍クラスの出席予定が入らず、月謝の代わりに休会費）
+model Leave {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fromMonth String // "YYYY-MM"
+  toMonth   String // "YYYY-MM"（含む）
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  VOID
+}
+
+/// 月謝の請求（会員×月）。lines は [{ label, amount }]
+model Invoice {
+  id        String        @id @default(cuid())
+  memberId  String
+  member    Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  month     String // "YYYY-MM"
+  amount    Int
+  lines     Json
+  status    InvoiceStatus @default(UNPAID)
+  paidAt    DateTime?
+  paymentId String?       @unique
+  note      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@unique([memberId, month])
+  @@index([month, status])
 }

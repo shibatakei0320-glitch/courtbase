@@ -7,7 +7,8 @@ import { audit } from "@/lib/audit";
 import { BookingError } from "@/lib/booking";
 import { bool, int, optStr, str, type ActionState } from "@/lib/action";
 import { addDays, fmtDate, fromJst } from "@/lib/format";
-import { enrolledCount, generateLessons, syncClassReservations, todayKey } from "@/lib/school";
+import { enrolledCount, generateLessons, syncClassReservations, syncMember, todayKey } from "@/lib/school";
+import { isMonth } from "@/lib/tuition";
 
 const MANAGERS = ["OWNER", "ADMIN"] as const;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,6 +44,7 @@ export async function saveClass(_: ActionState, fd: FormData): Promise<ActionSta
     courtId,
     levelId: optStr(fd, "levelId"),
     coachId: optStr(fd, "coachId"),
+    planId: optStr(fd, "planId"),
     durationMin: Math.min(600, Math.max(15, int(fd, "durationMin", 90))),
     capacity: Math.max(1, int(fd, "capacity", 8)),
     description: optStr(fd, "description"),
@@ -112,6 +114,7 @@ export async function enroll(_: ActionState, fd: FormData): Promise<ActionState>
   const s = await syncClassReservations(classId, memberId);
   await audit(me.id, "class.enroll", classId, `${m.lastName} ${m.firstName} ${start}〜`);
   revalidatePath(`/classes/${classId}`);
+  revalidatePath(`/members/${memberId}`);
   return { ok: `${m.lastName} ${m.firstName}さんを在籍登録しました（今後の${s.added}回に出席予定を入れました）` };
 }
 
@@ -132,7 +135,81 @@ export async function endEnrollment(_: ActionState, fd: FormData): Promise<Actio
   const s = await syncClassReservations(e.classId, e.memberId);
   await audit(me.id, "class.unenroll", e.classId, `${e.memberId} 〜${end}`);
   revalidatePath(`/classes/${e.classId}`);
+  revalidatePath(`/members/${e.memberId}`);
   return { ok: `在籍を${fmtDate(endDate)}までにしました（以降の${s.removed}回の出席予定を消しました）` };
+}
+
+/** スクールの退会：在籍中のすべてのクラスを最終日で終える */
+export async function withdrawAll(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const memberId = str(fd, "memberId");
+  const end = str(fd, "endDate");
+  if (!DATE.test(end)) return { error: "最終日を入力してください" };
+  const endDate = fromJst(end);
+  const list = await db.enrollment.findMany({ where: { memberId, OR: [{ endDate: null }, { endDate: { gt: endDate } }] } });
+  if (!list.length) return { error: "終了する在籍がありません" };
+  for (const e of list) {
+    if (endDate < e.startDate) await db.enrollment.delete({ where: { id: e.id } });
+    else await db.enrollment.update({ where: { id: e.id }, data: { endDate } });
+  }
+  const s = await syncMember(memberId);
+  await audit(me.id, "member.withdraw", memberId, `〜${end}`);
+  revalidatePath(`/members/${memberId}`);
+  return { ok: `${fmtDate(endDate)}で退会の手続きをしました（${list.length}クラス、以降の出席予定 ${s.removed}回を外しました）。会員ステータスは最終日の後に「退会」に変更してください` };
+}
+
+/** クラス変更：変更日の前日で今のクラスを終え、変更日から新しいクラスに在籍 */
+export async function transferEnrollment(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const e = await db.enrollment.findUnique({ where: { id: str(fd, "id") }, include: { schoolClass: true, member: true } });
+  if (!e) return { error: "在籍が見つかりません" };
+  const date = str(fd, "date");
+  if (!DATE.test(date)) return { error: "変更日を入力してください" };
+  const to = await db.schoolClass.findUnique({ where: { id: str(fd, "classId") } });
+  if (!to || to.id === e.classId) return { error: "変更先のクラスを選んでください" };
+  if (!to.active) return { error: "変更先のクラスは停止中です" };
+  const startDate = fromJst(date);
+  if (e.endDate && startDate > new Date(e.endDate.getTime() + 86400_000)) return { error: "変更日が在籍の最終日より後です" };
+  if ((await enrolledCount(to.id, startDate)) >= to.capacity) return { error: `「${to.name}」は定員（${to.capacity}名）に達しています` };
+  const dup = await db.enrollment.findFirst({ where: { classId: to.id, memberId: e.memberId, OR: [{ endDate: null }, { endDate: { gte: startDate } }] } });
+  if (dup) return { error: `すでに「${to.name}」に在籍しています` };
+  const lastDay = fromJst(addDays(date, -1));
+  await db.$transaction([
+    lastDay < e.startDate ? db.enrollment.delete({ where: { id: e.id } }) : db.enrollment.update({ where: { id: e.id }, data: { endDate: lastDay } }),
+    db.enrollment.create({ data: { classId: to.id, memberId: e.memberId, startDate, endDate: e.endDate } }),
+  ]);
+  await syncClassReservations(e.classId, e.memberId);
+  const s = await syncClassReservations(to.id, e.memberId);
+  await audit(me.id, "class.transfer", e.memberId, `${e.schoolClass.name} → ${to.name} ${date}〜`);
+  revalidatePath(`/members/${e.memberId}`);
+  return { ok: `${fmtDate(startDate)}から「${to.name}」に変更しました（出席予定 ${s.added}回）` };
+}
+
+/** 休会の登録（月単位） */
+export async function addLeave(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const memberId = str(fd, "memberId");
+  const from = str(fd, "fromMonth");
+  const to = str(fd, "toMonth") || from;
+  if (!isMonth(from) || !isMonth(to) || from > to) return { error: "休会の期間を正しく入力してください" };
+  const overlap = await db.leave.findFirst({ where: { memberId, fromMonth: { lte: to }, toMonth: { gte: from } } });
+  if (overlap) return { error: `${overlap.fromMonth}〜${overlap.toMonth} の休会と重なっています` };
+  await db.leave.create({ data: { memberId, fromMonth: from, toMonth: to, reason: optStr(fd, "reason") } });
+  const s = await syncMember(memberId);
+  await audit(me.id, "member.leave", memberId, `${from}〜${to}`);
+  revalidatePath(`/members/${memberId}`);
+  return { ok: `${from}〜${to} を休会にしました（期間中の出席予定 ${s.removed}回を外しました）` };
+}
+
+export async function removeLeave(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireStaff();
+  const l = await db.leave.findUnique({ where: { id: str(fd, "id") } });
+  if (!l) return { error: "休会が見つかりません" };
+  await db.leave.delete({ where: { id: l.id } });
+  const s = await syncMember(l.memberId);
+  await audit(me.id, "member.leave_remove", l.memberId, `${l.fromMonth}〜${l.toMonth}`);
+  revalidatePath(`/members/${l.memberId}`);
+  return { ok: `休会を取り消しました（出席予定 ${s.added}回を戻しました）` };
 }
 
 // ---- 振替の権利（スタッフ操作） ----

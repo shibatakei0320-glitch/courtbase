@@ -17,7 +17,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/reservations", label: "予約一覧" },
     { href: "/members", label: "会員" },
     { href: "/classes", label: "クラス", section: "スクール" },
+    { href: "/enrollments", label: "在籍台帳", section: "スクール" },
     { href: "/makeups", label: "振替", section: "スクール" },
+    { href: "/tuition", label: "月謝", section: "お金" },
     { href: "/payments", label: "売上", section: "お金" },
   ];
   if (canManage(me.role)) {

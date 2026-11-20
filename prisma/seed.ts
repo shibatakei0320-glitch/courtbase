@@ -49,10 +49,14 @@ async function main() {
     db.level.create({ data: { name: "初級", rank: 1, color: "#10b981" } }),
     db.level.create({ data: { name: "中級", rank: 2, color: "#f59e0b" } }),
   ]);
+  const [fee1, fee2] = await Promise.all([
+    db.plan.create({ data: { name: "週1回 初級", kind: "MONTHLY", price: 9800, sortOrder: 3 } }),
+    db.plan.create({ data: { name: "週1回 中級", kind: "MONTHLY", price: 11000, sortOrder: 4 } }),
+  ]);
   const classes = await Promise.all([
-    db.schoolClass.create({ data: { name: "初級 月曜10時", levelId: lv1.id, weekday: 1, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
-    db.schoolClass.create({ data: { name: "初級 土曜10時", levelId: lv1.id, weekday: 6, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
-    db.schoolClass.create({ data: { name: "中級 水曜19時", levelId: lv2.id, weekday: 3, startTime: "19:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "初級 月曜10時", planId: fee1.id, levelId: lv1.id, weekday: 1, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "初級 土曜10時", planId: fee1.id, levelId: lv1.id, weekday: 6, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "中級 水曜19時", planId: fee2.id, levelId: lv2.id, weekday: 3, startTime: "19:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
   ]);
   const today = jst(dayKey(0), "00:00");
   const roster = [members.slice(0, 4), members.slice(2, 6), members.slice(4, 8)];

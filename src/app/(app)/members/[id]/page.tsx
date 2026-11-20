@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { MEMBER_STATUS, PAY_METHOD, RES_STATUS, fmtDate, fmtDateTime, yen } from "@/lib/format";
 import { MemberForm } from "../MemberForm";
+import { EnrollmentPanel } from "./EnrollmentPanel";
 import { updateMember } from "../actions";
 
 export const metadata = { title: "会員詳細" };
@@ -19,8 +20,6 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
       reservations: { include: { slot: { include: { court: true } } }, orderBy: { slot: { startsAt: "desc" } }, take: 50 },
       payments: { orderBy: { paidAt: "desc" }, take: 50 },
       visits: { orderBy: { checkInAt: "desc" }, take: 30 },
-      enrollments: { include: { schoolClass: { include: { level: true } } }, orderBy: { startDate: "desc" } },
-      credits: { where: { status: "AVAILABLE" }, orderBy: { expiresAt: "asc" } },
     },
   });
   if (!member) notFound();
@@ -47,40 +46,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      <h2 className="mb-3 mt-8 font-semibold">クラス・振替</h2>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="card overflow-x-auto">
-          {member.enrollments.length === 0 ? <Empty>在籍しているクラスはありません（<Link className="text-brand-700 underline" href="/classes">クラス</Link>の画面から登録）</Empty> : (
-            <table className="table">
-              <thead><tr><th>クラス</th><th>在籍期間</th></tr></thead>
-              <tbody>
-                {member.enrollments.map((e) => {
-                  const ended = e.endDate && e.endDate.getTime() + 86400_000 <= Date.now();
-                  return (
-                    <tr key={e.id} className={ended ? "opacity-50" : ""}>
-                      <td><Link className="text-brand-700 hover:underline" href={`/classes/${e.classId}`}>{e.schoolClass.name}</Link>{e.schoolClass.level && <span className="ml-1 text-xs text-slate-500">{e.schoolClass.level.name}</span>}</td>
-                      <td className="whitespace-nowrap">{fmtDate(e.startDate)}〜{e.endDate ? fmtDate(e.endDate) : ""}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="card p-4">
-          {(() => {
-            const live = member.credits.filter((c) => c.expiresAt > new Date());
-            return (
-              <>
-                <p className="text-xs text-slate-500">使える振替</p>
-                <p className="mt-1 text-lg font-semibold">{live.length}回</p>
-                {live.length > 0 && <ul className="mt-2 space-y-1 text-sm text-slate-600">{live.map((c) => <li key={c.id}>{c.reason}・{fmtDate(c.expiresAt)}まで</li>)}</ul>}
-                <Link className="mt-3 inline-block text-sm text-brand-700 hover:underline" href={`/makeups?f=all&member=${member.id}`}>振替の管理へ</Link>
-              </>
-            );
-          })()}
-        </div>
-      </div>
+      <h2 className="mb-3 mt-8 font-semibold">在籍管理</h2>
+      <EnrollmentPanel memberId={member.id} />
 
       <h2 className="mb-3 mt-8 font-semibold">予約履歴</h2>
       <div className="card overflow-x-auto">

@@ -1,9 +1,9 @@
 import { ActionForm, Submit } from "@/components/ActionForm";
-import type { Court, Level, SchoolClass } from "@prisma/client";
+import type { Court, Level, Plan, SchoolClass } from "@prisma/client";
 import { WEEKDAYS } from "@/lib/school";
 import { saveClass } from "./actions";
 
-export function ClassForm({ c, levels, courts, coaches }: { c?: SchoolClass; levels: Level[]; courts: Court[]; coaches: { id: string; name: string }[] }) {
+export function ClassForm({ c, levels, courts, coaches, plans }: { c?: SchoolClass; levels: Level[]; courts: Court[]; coaches: { id: string; name: string }[]; plans: Plan[] }) {
   return (
     <ActionForm action={saveClass} className="space-y-3">
       {c && <input type="hidden" name="id" value={c.id} />}
@@ -23,6 +23,13 @@ export function ClassForm({ c, levels, courts, coaches }: { c?: SchoolClass; lev
           <option value="">（なし）</option>
           {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
+      </label>
+      <label className="block"><span className="label">月謝</span>
+        <select className="input" name="planId" defaultValue={c?.planId ?? ""}>
+          <option value="">（未設定）</option>
+          {plans.map((p) => <option key={p.id} value={p.id}>{p.name}（¥{p.price.toLocaleString()}）</option>)}
+        </select>
+        <span className="mt-1 block text-xs text-slate-500">「会員プラン」の月額プランから選びます</span>
       </label>
       <label className="block"><span className="label">コート</span>
         <select className="input" name="courtId" defaultValue={c?.courtId ?? courts[0]?.id} required>

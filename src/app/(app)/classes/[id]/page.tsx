@@ -22,6 +22,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
     include: {
       level: true,
       court: true,
+      plan: true,
       coach: { select: { name: true } },
       enrollments: { include: { member: true }, orderBy: { startDate: "asc" } },
       slots: {
@@ -33,10 +34,11 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
     },
   });
   if (!c) notFound();
-  const [levels, courts, coaches] = await Promise.all([
+  const [levels, courts, coaches, plans] = await Promise.all([
     db.level.findMany({ where: { OR: [{ active: true }, { id: c.levelId ?? "" }] }, orderBy: { rank: "asc" } }),
     db.court.findMany({ orderBy: { sortOrder: "asc" } }),
     db.staff.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.plan.findMany({ where: { kind: "MONTHLY" }, orderBy: { sortOrder: "asc" } }),
   ]);
   const current = c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now);
   const ended = c.enrollments.filter((e) => !current.includes(e));
@@ -65,6 +67,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
         <span>{c.court.name}</span>
         {c.level && <span>レベル {c.level.name}</span>}
         <span>コーチ {c.coach?.name ?? "未定"}</span>
+        <span>月謝 {c.plan ? `${c.plan.name} ¥${c.plan.price.toLocaleString()}` : "未設定"}</span>
         <span>在籍 {current.length}/{c.capacity}名</span>
         {!c.active && <Badge>停止中</Badge>}
       </div>
@@ -160,7 +163,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
             )}
           </div>
           {manage && <div className="card p-5"><h2 className="mb-3 font-semibold">回を作成</h2><GenerateForm classId={c.id} /></div>}
-          {manage && <div className="card p-5"><h2 className="mb-3 font-semibold">クラスの設定</h2><ClassForm c={c} levels={levels} courts={courts} coaches={coaches} /></div>}
+          {manage && <div className="card p-5"><h2 className="mb-3 font-semibold">クラスの設定</h2><ClassForm c={c} levels={levels} courts={courts} coaches={coaches} plans={plans} /></div>}
         </div>
       </div>
     </>
