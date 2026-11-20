@@ -157,7 +157,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         </nav>
         {events.length === 0 ? (
           <p className="border-y border-[#13201A]/10 px-1 py-10 text-sm leading-relaxed text-[#13201A]/55">
-            いま申し込めるイベントはありません。新しく公開されると、ここに表示され、LINEでもお知らせします。
+            いま申し込めるイベントはありません。新しく公開されると、ここに表示されます。
           </p>
         ) : (
           <ul className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10">
