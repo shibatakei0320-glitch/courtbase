@@ -24,6 +24,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
       court: true,
       program: true,
       instructor: true,
+      schoolClass: { include: { level: true } },
       reservations: { include: { member: { include: { plan: true } }, category: true }, orderBy: { createdAt: "asc" } },
       categories: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], include: { _count: { select: { waitlist: true } } } },
       messages: { orderBy: { createdAt: "desc" }, take: 20 },
@@ -69,9 +70,10 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
         <span>{slot.court.name}</span>
         <span>{SLOT_KIND[slot.kind]}</span>
         <span>予約 {activeCount}/{slot.capacity}</span>
-        <span>{cats.length ? "参加費は種目ごと" : yen(slot.price)}</span>
+        {!slot.classId && <span>{cats.length ? "参加費は種目ごと" : yen(slot.price)}</span>}
         {slot.instructor && <span>担当 {slot.instructor.name}</span>}
-        {canceled && <Badge tone="red">中止</Badge>}
+        {slot.schoolClass && <Link href={`/classes/${slot.schoolClass.id}`} className="text-brand-700 hover:underline">クラス：{slot.schoolClass.name}{slot.schoolClass.level ? `（${slot.schoolClass.level.name}）` : ""}</Link>}
+        {canceled && <Badge tone="red">{slot.classId ? "休講" : "中止"}</Badge>}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -100,17 +102,20 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
                   {g.rows.length === 0 && g.title && <tr><td colSpan={5} className="text-xs text-slate-400">まだエントリーはありません</td></tr>}
                   {g.rows.map((r) => (
                     <tr key={r.id}>
-                      <td><Link href={`/members/${r.memberId}`} className="text-brand-700 hover:underline">{r.member.lastName} {r.member.firstName}</Link>{!r.member.lineUserId && <span className="ml-1 text-xs text-slate-400">LINE未連携</span>}</td>
+                      <td><Link href={`/members/${r.memberId}`} className="text-brand-700 hover:underline">{r.member.lastName} {r.member.firstName}</Link>{r.kind === "REGULAR" && <span className="ml-1"><Badge>在籍</Badge></span>}{r.kind === "MAKEUP" && <span className="ml-1"><Badge tone="yellow">振替</Badge></span>}{!r.member.lineUserId && <span className="ml-1 text-xs text-slate-400">LINE未連携</span>}</td>
                       <td>{cats.length ? <><span className="font-medium">{r.teamName ?? ""}</span>{r.players.length > 0 && <span className={r.teamName ? "ml-2 text-xs text-slate-500" : ""}>{r.players.join(" / ")}</span>}</> : (r.member.plan?.name ?? "-")}</td>
                       <td>{fmtDateTime(r.createdAt)}</td>
-                      <td><Badge tone={TONE[r.status]}>{RES_STATUS[r.status]}</Badge></td>
+                      <td><Badge tone={TONE[r.status]}>{r.kind === "REGULAR" && r.status === "CANCELED" ? "欠席連絡" : RES_STATUS[r.status]}</Badge></td>
                       <td>
+                        {r.status === "CANCELED" && r.kind === "REGULAR" && !canceled && <StatusBtn id={r.id} status="RESERVED" label="欠席を取り消す" />}
                         {r.status !== "CANCELED" && (
                           <div className="flex gap-1">
                             {r.status !== "ATTENDED" && <StatusBtn id={r.id} status="ATTENDED" label="出席" />}
-                            {r.status !== "NO_SHOW" && <StatusBtn id={r.id} status="NO_SHOW" label="欠席" />}
+                            {r.status !== "NO_SHOW" && <StatusBtn id={r.id} status="NO_SHOW" label={slot.classId ? "無断欠席" : "欠席"} />}
                             {r.status !== "RESERVED" && <StatusBtn id={r.id} status="RESERVED" label="予約中に戻す" />}
-                            <StatusBtn id={r.id} status="CANCELED" label="取消" danger />
+                            {r.kind === "REGULAR" ? (r.status === "RESERVED" && <StatusBtn id={r.id} status="CANCELED" label="欠席連絡（振替付与）" confirmText="欠席にして、振替の権利を発行しますか？" />)
+                              : r.kind === "MAKEUP" ? <StatusBtn id={r.id} status="CANCELED" label="振替取消" confirmText="振替を取り消しますか？（振替の権利は会員に戻ります）" />
+                              : <StatusBtn id={r.id} status="CANCELED" label="取消" danger />}
                             {isEvent && r.member.lineUserId && (
                               <details className="relative">
                                 <summary className="btn-secondary btn-sm cursor-pointer list-none">LINE</summary>
@@ -246,11 +251,11 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
           </div>
           {!canceled && (
             <div className="card p-4">
-              <h2 className="mb-2 font-semibold text-red-700">枠の中止</h2>
-              <p className="mb-3 text-xs text-slate-500">この枠の予約はすべてキャンセルされ、カードで支払い済みの分は全額返金されます。会員にはLINEでお知らせします。</p>
-              <ActionForm action={cancelSlot} confirm="この枠を中止しますか？（カードで支払い済みの予約は全額返金されます）">
+              <h2 className="mb-2 font-semibold text-red-700">{slot.classId ? "休講" : "枠の中止"}</h2>
+              <p className="mb-3 text-xs text-slate-500">{slot.classId ? "在籍者には振替の権利を発行し、振替で予約していた人には権利を戻します。" : "この枠の予約はすべてキャンセルされ、カードで支払い済みの分は全額返金されます。会員にはLINEでお知らせします。"}</p>
+              <ActionForm action={cancelSlot} confirm={slot.classId ? "この回を休講にしますか？" : "この枠を中止しますか？（カードで支払い済みの予約は全額返金されます）"}>
                 <input type="hidden" name="id" value={slot.id} />
-                <Submit className="btn-danger">中止する</Submit>
+                <Submit className="btn-danger">{slot.classId ? "休講にする" : "中止する"}</Submit>
               </ActionForm>
             </div>
           )}
@@ -266,9 +271,9 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
   );
 }
 
-function StatusBtn({ id, status, label, danger }: { id: string; status: string; label: string; danger?: boolean }) {
+function StatusBtn({ id, status, label, danger, confirmText }: { id: string; status: string; label: string; danger?: boolean; confirmText?: string }) {
   return (
-    <ActionForm action={setReservationStatus} confirm={danger ? "この予約を取り消しますか？（カードで支払い済みの場合は全額返金されます）" : undefined}>
+    <ActionForm action={setReservationStatus} confirm={confirmText ?? (danger ? "この予約を取り消しますか？（カードで支払い済みの場合は全額返金されます）" : undefined)}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
       <Submit className={`${danger ? "btn-danger" : "btn-secondary"} btn-sm`}>{label}</Submit>

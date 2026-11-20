@@ -15,13 +15,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/schedule", label: "スケジュール" },
     { href: "/reservations", label: "予約一覧" },
     { href: "/members", label: "会員" },
-    { href: "/payments", label: "売上" },
+    { href: "/classes", label: "クラス", section: "スクール" },
+    { href: "/makeups", label: "振替", section: "スクール" },
+    { href: "/payments", label: "売上", section: "お金" },
   ];
   if (canManage(me.role)) {
     if (me.role === "OWNER") items.push({ href: "/settings", label: "施設設定", section: "設定" });
     items.push(
       { href: "/master/courts", label: "コート", section: "設定" },
       { href: "/master/programs", label: "プログラム", section: "設定" },
+      { href: "/master/levels", label: "レベル", section: "設定" },
       { href: "/master/plans", label: "会員プラン", section: "設定" },
       { href: "/staff", label: "スタッフ", section: "設定" },
       { href: "/audit-logs", label: "操作ログ", section: "設定" },

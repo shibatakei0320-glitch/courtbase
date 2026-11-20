@@ -15,6 +15,7 @@ import { knockout, league, shuffle } from "@/lib/draw";
 import { refundReservation } from "@/lib/refund";
 import { clearExpiredHolds } from "@/lib/court-booking";
 import { notifyBooked, notifyCanceled, notifyWaitlist } from "@/lib/notify";
+import { cancelLesson, cancelMakeup, recordAbsence, undoAbsence } from "@/lib/school";
 
 async function overlaps(courtId: string, start: Date, end: Date, excludeId?: string) {
   await clearExpiredHolds(courtId);
@@ -83,6 +84,13 @@ export async function updateSlot(_: ActionState, fd: FormData): Promise<ActionSt
 export async function cancelSlot(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff();
   const id = str(fd, "id");
+  const target = await db.slot.findUnique({ where: { id }, select: { classId: true } });
+  if (target?.classId) {
+    const r = await cancelLesson(id, me.id);
+    await audit(me.id, "slot.cancel", id, `休講 振替${r.credited}件`);
+    revalidatePath(`/schedule/${id}`);
+    return { ok: `休講にしました（${r.credited}名に振替の権利を発行・返却）` };
+  }
   await db.slot.update({ where: { id }, data: { status: "CANCELED" } });
   const active = await db.reservation.findMany({ where: { slotId: id, status: "RESERVED" } });
   let refunded = 0;
@@ -142,7 +150,17 @@ export async function setReservationStatus(_: ActionState, fd: FormData): Promis
   const status = str(fd, "status") as ReservationStatus;
   let msg = "更新しました";
   try {
-    if (status === "CANCELED") {
+    const cur = await db.reservation.findUnique({ where: { id } });
+    if (status === "CANCELED" && cur?.kind === "REGULAR") {
+      await recordAbsence(id, { reason: "欠席連絡（スタッフ受付）", staffId: me.id });
+      msg = "欠席にし、振替の権利を発行しました";
+    } else if (status === "CANCELED" && cur?.kind === "MAKEUP") {
+      await cancelMakeup(id);
+      msg = "振替を取り消し、振替の権利を会員に戻しました";
+    } else if (status === "RESERVED" && cur?.kind === "REGULAR" && cur.status === "CANCELED") {
+      await undoAbsence(id);
+      msg = "欠席を取り消し、出席予定に戻しました";
+    } else if (status === "CANCELED") {
       const canceled = await cancelReservation(id);
       const amt = await refundReservation(id, "スタッフによる取消");
       await notifyCanceled(id, amt);

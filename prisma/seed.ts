@@ -43,6 +43,31 @@ async function main() {
     if (d % 2 === 0) await db.slot.create({ data: { title: rental.name, kind: "RENTAL", programId: rental.id, courtId: courts[2].id, startsAt: jst(date, "13:00"), endsAt: jst(date, "14:00"), capacity: 4, price: 4000 } });
     for (const m of members.slice(0, 3 + ((d + 1) % 4))) await db.reservation.create({ data: { slotId: s1.id, memberId: m.id, status: d < 0 ? "ATTENDED" : "RESERVED" } });
   }
+
+  // スクール：レベル・定期クラス・在籍・4週間分の回
+  const [lv1, lv2] = await Promise.all([
+    db.level.create({ data: { name: "初級", rank: 1, color: "#10b981" } }),
+    db.level.create({ data: { name: "中級", rank: 2, color: "#f59e0b" } }),
+  ]);
+  const classes = await Promise.all([
+    db.schoolClass.create({ data: { name: "初級 月曜10時", levelId: lv1.id, weekday: 1, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "初級 土曜10時", levelId: lv1.id, weekday: 6, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "中級 水曜19時", levelId: lv2.id, weekday: 3, startTime: "19:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+  ]);
+  const today = jst(dayKey(0), "00:00");
+  const roster = [members.slice(0, 4), members.slice(2, 6), members.slice(4, 8)];
+  for (const [ci, c] of classes.entries()) {
+    for (const m of roster[ci]) await db.enrollment.create({ data: { classId: c.id, memberId: m.id, startDate: today } });
+    for (let d = 1; d <= 28; d++) {
+      const date = dayKey(d);
+      if (new Date(jst(date, "12:00").getTime() + 9 * 3600_000).getUTCDay() !== c.weekday) continue;
+      const startsAt = jst(date, c.startTime);
+      const slot = await db.slot.create({
+        data: { title: c.name, kind: "LESSON", classId: c.id, courtId: c.courtId, instructorId: c.coachId, startsAt, endsAt: new Date(startsAt.getTime() + c.durationMin * 60_000), capacity: c.capacity },
+      });
+      for (const m of roster[ci]) await db.reservation.create({ data: { slotId: slot.id, memberId: m.id, kind: "REGULAR" } });
+    }
+  }
   console.log("demo data created");
 }
 

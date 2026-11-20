@@ -4,13 +4,14 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { saveSettings } from "./actions";
 import { defaultPrivacy, defaultTerms } from "@/lib/legal";
+import { LEVEL_RULE } from "@/lib/school";
 
 export const metadata = { title: "施設設定" };
 
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: "pickleland", openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />
@@ -29,6 +30,17 @@ export default async function SettingsPage() {
           <label className="block"><span className="label">会員のキャンセル期限（開始の何時間前まで）</span><input className="input" type="number" name="cancelDeadlineHours" min={0} max={720} defaultValue={s.cancelDeadlineHours} /><span className="mt-1 block text-xs text-slate-500">期限内なら会員がマイページからキャンセルでき、カード払いは全額返金されます</span></label>
           <label className="block"><span className="label">ログイン有効時間（時間）</span><input className="input" type="number" name="sessionHours" min={1} max={720} defaultValue={s.sessionHours} /></label>
           <label className="block sm:col-span-2"><span className="label">問い合わせ先メール</span><input className="input" type="email" name="contactEmail" defaultValue={s.contactEmail ?? ""} /></label>
+          <div className="mt-4 border-t pt-6 sm:col-span-2">
+            <h2 className="font-semibold">スクール（欠席・振替）</h2>
+            <p className="mt-1 text-xs text-slate-500">クラス在籍者が会員ページから欠席連絡すると、振替の権利が1回分付きます。権利を使って、空きのある別の回を予約できます。</p>
+          </div>
+          <label className="block"><span className="label">欠席連絡の期限（開始の何時間前まで）</span><input className="input" type="number" name="absenceDeadlineHours" min={0} max={168} defaultValue={s.absenceDeadlineHours} /><span className="mt-1 block text-xs text-slate-500">0 なら開始時刻まで。期限後の欠席は振替なし（スタッフは期限後も受付可）</span></label>
+          <label className="block"><span className="label">振替の有効期限（欠席した日から何日）</span><input className="input" type="number" name="makeupValidDays" min={1} max={365} defaultValue={s.makeupValidDays} /></label>
+          <label className="block sm:col-span-2"><span className="label">振替できるレベル</span>
+            <select className="input" name="makeupLevelRule" defaultValue={s.makeupLevelRule}>
+              {Object.entries(LEVEL_RULE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
           <div className="mt-4 border-t pt-6 sm:col-span-2">
             <h2 className="font-semibold">特定商取引法に基づく表記</h2>
             <p className="mt-1 text-xs text-slate-500">カード決済の本番利用に必要です。空欄の項目は「請求があった場合には遅滞なく開示いたします」と表示されます（個人事業の場合に認められている書き方です）。<a className="text-brand-700 underline" href="/my/legal/tokushoho" target="_blank">表示を確認</a></p>

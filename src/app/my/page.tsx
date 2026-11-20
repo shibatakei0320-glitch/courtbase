@@ -21,6 +21,10 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
   const kind = KINDS.some((k) => k.key === sp.kind && k.key !== "ALL") ? (sp.kind as SlotKind) : null;
   const now = new Date();
   const facility = await facilityModeOn();
+  const [enrolled, credits] = await Promise.all([
+    db.enrollment.count({ where: { memberId: me.id, OR: [{ endDate: null }, { endDate: { gte: new Date(now.getTime() - 86400_000) } }] } }),
+    db.makeupCredit.count({ where: { memberId: me.id, status: "AVAILABLE", expiresAt: { gt: now } } }),
+  ]);
   const [mine, events] = await Promise.all([
     db.reservation.findMany({
       where: { memberId: me.id, status: "RESERVED", slot: { endsAt: { gte: now } } },
@@ -28,7 +32,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
       orderBy: { slot: { startsAt: "asc" } },
     }),
     db.slot.findMany({
-      where: { status: "OPEN", memberBooked: false, startsAt: { gt: now }, ...(kind ? { kind } : {}) },
+      where: { status: "OPEN", memberBooked: false, classId: null, startsAt: { gt: now }, ...(kind ? { kind } : {}) },
       include: { _count: { select: { categories: true, reservations: { where: { status: { in: ["RESERVED", "ATTENDED"] } } } } } },
       orderBy: { startsAt: "asc" },
       take: 60,
@@ -66,6 +70,20 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         </div>
       </section>
 
+      {(enrolled > 0 || credits > 0) && (
+        <Link href="/my/school" className="flex items-center justify-between rounded-2xl bg-white px-5 py-4 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+          <span>
+            <span className="block text-sm font-bold">スクール</span>
+            <span className="mt-1 block text-xs text-[#13201A]/50">欠席連絡・振替の予約</span>
+          </span>
+          {credits > 0 ? (
+            <span className="text-right">
+              <span className="block text-[11px] text-[#13201A]/50">使える振替</span>
+              <span className="font-display text-2xl font-medium leading-none text-[#0F3D2E]">{credits}<span className="ml-0.5 text-xs">回</span></span>
+            </span>
+          ) : <span className="text-xs text-[#13201A]/50">開く →</span>}
+        </Link>
+      )}
       <div className={`grid gap-3 ${facility ? "grid-cols-3" : "grid-cols-1"}`}>
         {facility && (
           <>

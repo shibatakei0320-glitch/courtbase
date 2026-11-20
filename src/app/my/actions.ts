@@ -14,6 +14,7 @@ import { fmtDateTime, fromJst, jstDateKey } from "@/lib/format";
 import { createMemberSession, destroyMemberSession, getLinePending, LINE_PENDING_COOKIE, requireMember } from "@/lib/member-auth";
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { appUrl } from "@/lib/url";
+import { absenceDeadline, bookMakeup, cancelMakeup, recordAbsence, schoolSettings, undoAbsence } from "@/lib/school";
 
 export async function memberLogout() {
   await destroyMemberSession();
@@ -72,6 +73,7 @@ export async function applyEvent(_: ActionState, fd: FormData): Promise<ActionSt
   const slotId = str(fd, "slotId");
   const slot = await db.slot.findUnique({ where: { id: slotId } });
   if (!slot || slot.status !== "OPEN" || slot.memberBooked) return { error: "この枠は予約できません" };
+  if (slot.classId) return { error: "クラスの回は「振替」から予約してください" };
   if (slot.startsAt <= new Date()) return { error: "受付は終了しました" };
 
   // 種目のある大会：種目を選び、パートナー名・チーム名を入力してエントリー
@@ -158,8 +160,19 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
   const me = await requireMember();
   const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, status: "RESERVED" }, include: { slot: true } });
   if (!r) return { error: "キャンセルできる予約がありません" };
+  if (r.kind === "REGULAR") return { error: "クラスの回は「欠席連絡」からお休みしてください" };
   const { at, hours } = await cancelDeadline(r.slot.startsAt);
   if (Date.now() > at.getTime()) return { error: `キャンセルの期限（開始の${hours}時間前）を過ぎています。施設スタッフにお問い合わせください` };
+  if (r.kind === "MAKEUP") {
+    try {
+      await cancelMakeup(r.id);
+    } catch (e) {
+      if (e instanceof BookingError) return { error: e.message };
+      throw e;
+    }
+    await audit(null, "makeup.member_cancel", r.id);
+    redirect("/my/school?makeupCanceled=1");
+  }
   try {
     await cancelReservation(r.id);
   } catch (e) {
@@ -282,4 +295,61 @@ export async function leaveWaitlist(_: ActionState, fd: FormData): Promise<Actio
   await db.waitlist.deleteMany({ where: { categoryId: str(fd, "categoryId"), memberId: me.id } });
   revalidatePath(`/my/events/${str(fd, "slotId")}`);
   return { ok: "キャンセル待ちを取り消しました" };
+}
+
+// ---- スクール：欠席連絡・振替 ----
+
+/** 欠席連絡（期限内なら振替の権利が付く） */
+export async function reportAbsence(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, kind: "REGULAR", status: "RESERVED" }, include: { slot: true } });
+  if (!r) return { error: "欠席連絡できる回がありません" };
+  const { absenceDeadlineHours } = await schoolSettings();
+  const at = absenceDeadline(r.slot.startsAt, absenceDeadlineHours);
+  if (Date.now() > at.getTime())
+    return { error: `欠席連絡の期限（${absenceDeadlineHours > 0 ? `開始の${absenceDeadlineHours}時間前` : "開始時刻"}）を過ぎています。スクールに直接ご連絡ください` };
+  try {
+    await recordAbsence(r.id);
+  } catch (e) {
+    if (e instanceof BookingError) return { error: e.message };
+    throw e;
+  }
+  await audit(null, "absence.member", r.id);
+  revalidatePath("/my/school");
+  revalidatePath("/my");
+  return { ok: "欠席を受け付けました。振替が1回分付きました" };
+}
+
+/** 欠席連絡の取り消し（振替を使っておらず、席が空いている場合） */
+export async function undoMyAbsence(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const r = await db.reservation.findFirst({ where: { id: str(fd, "id"), memberId: me.id, kind: "REGULAR" } });
+  if (!r) return { error: "取り消せる欠席連絡がありません" };
+  try {
+    await undoAbsence(r.id);
+  } catch (e) {
+    if (e instanceof BookingError) return { error: e.message };
+    throw e;
+  }
+  await audit(null, "absence.member_undo", r.id);
+  revalidatePath("/my/school");
+  revalidatePath("/my");
+  return { ok: "欠席連絡を取り消しました。いつもどおり出席の予定です" };
+}
+
+/** 振替の予約 */
+export async function bookMyMakeup(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  if (me.status !== "ACTIVE") return { error: "現在予約できません（休会中）。スクールにお問い合わせください" };
+  let id: string;
+  try {
+    const r = await bookMakeup(str(fd, "creditId"), str(fd, "slotId"), me.id);
+    id = r.id;
+  } catch (e) {
+    if (e instanceof BookingError) return { error: e.message };
+    throw e;
+  }
+  await audit(null, "makeup.member_book", id);
+  await notifyBooked(id);
+  redirect("/my/school?booked=1");
 }

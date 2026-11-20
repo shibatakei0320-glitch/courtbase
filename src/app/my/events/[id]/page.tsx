@@ -27,7 +27,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const left = Math.max(0, slot.capacity - taken);
   const deadline = await cancelDeadline(slot.startsAt);
   const paid = mine ? await db.payment.findFirst({ where: { reservationId: mine.id, refundedAt: null, amount: { gt: 0 } } }) : null;
-  const canCancel = mine?.status === "RESERVED" && Date.now() <= deadline.at.getTime();
+  const isClass = !!slot.classId;
+  const canCancel = mine?.status === "RESERVED" && mine.kind !== "REGULAR" && Date.now() <= deadline.at.getTime();
   const closed = slot.status !== "OPEN" || slot.startsAt <= new Date();
   const d = jst(slot.startsAt);
   const about = [slot.program?.description, slot.note].filter(Boolean).join("\n\n");
@@ -41,14 +42,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         <div className="relative">
           <p className="font-display text-[4.5rem] font-medium leading-[0.85] tracking-tight">{d.m}.{String(d.d).padStart(2, "0")}</p>
           <p className="mt-3 text-sm text-white/70">{d.w}曜日　{hm(slot.startsAt)}–{hm(slot.endsAt)}</p>
-          <p className="mt-6 text-xs text-white/55">{KIND_LABEL[slot.kind]}</p>
+          <p className="mt-6 text-xs text-white/55">{isClass ? (mine?.kind === "MAKEUP" ? "クラス（振替）" : "クラス") : KIND_LABEL[slot.kind]}</p>
           <h1 className="mt-1 max-w-[17rem] text-2xl font-medium leading-snug">{slot.title}</h1>
         </div>
       </section>
 
       <dl className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10 px-1 text-sm">
         <div className="flex justify-between gap-4 py-4"><dt className="text-[#13201A]/55">場所</dt><dd className="font-medium">{slot.court.name}</dd></div>
-        <div className="flex items-baseline justify-between gap-4 py-4"><dt className="text-[#13201A]/55">料金</dt><dd className="font-display text-2xl font-medium leading-none">{slot.price > 0 ? yen(slot.price) : "無料"}</dd></div>
+        {!isClass && <div className="flex items-baseline justify-between gap-4 py-4"><dt className="text-[#13201A]/55">料金</dt><dd className="font-display text-2xl font-medium leading-none">{slot.price > 0 ? yen(slot.price) : "無料"}</dd></div>}
         {!slot.memberBooked && (
         <div className="py-4">
           <div className="flex justify-between gap-4">
@@ -62,18 +63,25 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {about && !slot.memberBooked && <p className="whitespace-pre-wrap px-1 text-sm leading-[1.9] text-[#13201A]/80">{about}</p>}
 
-      {mine?.status === "RESERVED" && (
+      {mine?.status === "RESERVED" && mine.kind === "REGULAR" && (
         <section className="px-1">
-          <h2 className="text-sm font-bold">キャンセル</h2>
+          <h2 className="text-sm font-bold">お休みするとき</h2>
+          <p className="mt-2 text-sm leading-relaxed text-[#13201A]/65">在籍クラスの回です。<Link href="/my/school" className="underline underline-offset-4">スクールのページ</Link>から欠席連絡すると、振替が1回分付きます。</p>
+        </section>
+      )}
+
+      {mine?.status === "RESERVED" && mine.kind !== "REGULAR" && (
+        <section className="px-1">
+          <h2 className="text-sm font-bold">{mine.kind === "MAKEUP" ? "振替の取り消し" : "キャンセル"}</h2>
           {canCancel ? (
             <>
               <p className="mt-2 text-sm leading-relaxed text-[#13201A]/65">
-                {fmtDateTime(deadline.at)}までキャンセルできます。{paid ? `お支払いいただいた${yen(paid.amount)}は全額返金されます。` : ""}
+                {fmtDateTime(deadline.at)}までキャンセルできます。{mine.kind === "MAKEUP" ? "取り消すと振替の権利は戻ります。" : ""}{paid ? `お支払いいただいた${yen(paid.amount)}は全額返金されます。` : ""}
               </p>
-              <ActionForm action={cancelMyReservation} confirm="この予約をキャンセルしますか？" className="mt-3">
+              <ActionForm action={cancelMyReservation} confirm={mine.kind === "MAKEUP" ? "この振替を取り消しますか？" : "この予約をキャンセルしますか？"} className="mt-3">
                 <input type="hidden" name="id" value={mine.id} />
                 <Submit className="rounded-xl border border-[#B4371F]/40 px-5 py-3 text-sm font-bold text-[#B4371F] transition hover:bg-[#B4371F]/5 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B4371F]">
-                  予約をキャンセルする
+                  {mine.kind === "MAKEUP" ? "振替を取り消す" : "予約をキャンセルする"}
                 </Submit>
               </ActionForm>
             </>
@@ -86,7 +94,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       <div className="fixed inset-x-0 bottom-0 z-10 bg-[#F2F3F0]/90 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
         <div className="mx-auto max-w-xl">
           {mine ? (
-            <p className="rounded-xl border border-[#0F3D2E] py-4 text-center text-sm font-bold text-[#0F3D2E]">予約済みです</p>
+            <p className="rounded-xl border border-[#0F3D2E] py-4 text-center text-sm font-bold text-[#0F3D2E]">{mine.kind === "REGULAR" ? "出席予定です" : mine.kind === "MAKEUP" ? "振替で予約済みです" : "予約済みです"}</p>
+          ) : isClass ? (
+            closed || left <= 0 ? (
+              <p className="rounded-xl border border-[#13201A]/15 py-4 text-center text-sm text-[#13201A]/50">{closed ? "受付は終了しました" : "満員です"}</p>
+            ) : (
+              <Link href="/my/school/makeup" className="block rounded-xl bg-[#0F3D2E] py-4 text-center text-sm font-bold text-white hover:bg-[#0B2F23]">振替で予約する</Link>
+            )
           ) : closed ? (
             <p className="rounded-xl border border-[#13201A]/15 py-4 text-center text-sm text-[#13201A]/50">受付は終了しました</p>
           ) : left <= 0 ? (
