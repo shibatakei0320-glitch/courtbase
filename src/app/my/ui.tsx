@@ -10,10 +10,10 @@ export function jst(d: Date) {
 export const hm = (d: Date) => d.toLocaleTimeString("ja-JP", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
 /** 細い線で描いたピックルボールのコート（右寄せ・装飾） */
-export function Court({ className = "" }: { className?: string }) {
+export function Court({ className = "", stroke = "white", opacity = 0.22 }: { className?: string; stroke?: string; opacity?: number }) {
   return (
     <svg viewBox="0 0 220 440" aria-hidden className={`pointer-events-none absolute ${className}`}>
-      <g fill="none" stroke="white" strokeOpacity="0.22" strokeWidth="1">
+      <g fill="none" stroke={stroke} strokeOpacity={opacity} strokeWidth="1">
         <rect x="10" y="10" width="200" height="420" />
         <line x1="10" y1="152" x2="210" y2="152" />
         <line x1="10" y1="288" x2="210" y2="288" />

@@ -42,25 +42,48 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
   return (
     <div className="space-y-10">
       <div className="space-y-3">
-      <section className="relative overflow-hidden rounded-2xl bg-[#0F3D2E] px-6 pb-8 pt-7 text-white">
-        <Court className="-right-10 -top-16 h-[22rem] rotate-[-8deg]" />
+      <section className="relative overflow-hidden rounded-2xl bg-[#E6EFE7] px-6 pb-7 pt-6 text-[#13201A]">
+        <Court className="-right-12 -top-20 h-[22rem] rotate-[-8deg]" stroke="#0F3D2E" opacity={0.12} />
         <div className="relative">
+          <p className="text-sm text-[#13201A]/70">こんにちは、{me.firstName}さん</p>
           {next && nd ? (
             <>
-              <p className="text-xs text-white/60">次の予定</p>
-              <p className="mt-3 font-display text-[4.5rem] font-medium leading-[0.85] tracking-tight">
-                {nd.m}.{String(nd.d).padStart(2, "0")}
-              </p>
-              <p className="mt-3 text-sm text-white/70">{nd.w}曜日　{hm(next.startsAt)}–{hm(next.endsAt)}</p>
-              <p className="mt-5 max-w-[16rem] text-lg font-medium leading-snug">{next.title}</p>
-              <p className="mt-1 text-sm text-white/60">{next.court.name}</p>
-              <Link href={`/my/events/${next.id}`} className="mt-5 inline-block border-b border-white/40 pb-0.5 text-xs text-white/80 hover:border-white hover:text-white">予約の詳細・キャンセル</Link>
+              <p className="mt-4 text-xs font-bold text-[#0F3D2E]">次の予定</p>
+              <div className="mt-2 flex items-end gap-4">
+                <p className="font-display text-[3.75rem] font-medium leading-[0.85] tracking-tight text-[#0F3D2E]">
+                  {nd.m}.{String(nd.d).padStart(2, "0")}
+                </p>
+                <p className="pb-1 text-sm text-[#13201A]/70">{nd.w}曜日<br />{hm(next.startsAt)}–{hm(next.endsAt)}</p>
+              </div>
+              <p className="mt-4 text-lg font-bold leading-snug">{next.title}</p>
+              <p className="mt-0.5 text-sm text-[#13201A]/60">{next.court.name}</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Link href={`/my/events/${next.id}`} className="rounded-full bg-[#0F3D2E] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0B2F23]">予約の内容を見る</Link>
+                <a href="#list" className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0F3D2E] hover:bg-white/80">ほかのイベントも見る</a>
+              </div>
             </>
           ) : (
             <>
-              <p className="text-xs text-white/60">{me.firstName}さん</p>
-              <p className="mt-4 text-[1.9rem] font-medium leading-[1.35] tracking-wide">コートに立つ日を、<br />選ぶ。</p>
-              <p className="mt-4 max-w-[19rem] text-sm leading-relaxed text-white/65">{facility ? "コートの利用、レッスン、大会・イベントをここから予約できます。" : "大会・イベントの申込みは、ここからできます。"}</p>
+              <h1 className="mt-3 text-[1.6rem] font-bold leading-[1.4]">
+                参加したいイベントを<br />選んで申し込むだけ。
+              </h1>
+              <p className="mt-3 max-w-[22rem] text-sm leading-relaxed text-[#13201A]/70">
+                {facility ? "コートの予約、レッスン、大会・イベントの申込みが、このページでできます。" : "大会・イベントの申込みは、スマホでこのページから。参加費はカードで払えて、予定はLINEでお知らせします。"}
+              </p>
+              <ol className="mt-5 grid grid-cols-3 gap-2 text-center">
+                {[
+                  ["選ぶ", "一覧から見つける"],
+                  ["申し込む", "カードで支払い"],
+                  ["当日はコートへ", "前日にLINEで連絡"],
+                ].map(([t, d], i) => (
+                  <li key={t} className="rounded-xl bg-white/80 px-2 py-3">
+                    <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-[#0F3D2E] font-display text-sm text-white">{i + 1}</span>
+                    <span className="mt-1.5 block text-[13px] font-bold leading-tight">{t}</span>
+                    <span className="mt-0.5 block text-[11px] leading-tight text-[#13201A]/55">{d}</span>
+                  </li>
+                ))}
+              </ol>
+              <a href="#list" className="mt-5 flex w-full items-center justify-center rounded-full bg-[#0F3D2E] py-3.5 text-sm font-bold text-white hover:bg-[#0B2F23]">申し込めるイベントを見る</a>
             </>
           )}
         </div>
@@ -113,8 +136,8 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
       )}
 
       <section>
-        <div className="mb-3 flex items-baseline justify-between px-1">
-          <h2 className="text-sm font-bold">予約できる枠</h2>
+        <div id="list" className="mb-3 flex scroll-mt-4 items-baseline justify-between px-1">
+          <h2 className="text-sm font-bold">申し込めるイベント・枠</h2>
           {events.length > 0 && <span className="font-display text-sm text-[#13201A]/50">{events.length}件</span>}
         </div>
         <nav className="mb-2 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="種類で絞り込む">
@@ -134,7 +157,7 @@ export default async function MyPage({ searchParams }: { searchParams: Promise<{
         </nav>
         {events.length === 0 ? (
           <p className="border-y border-[#13201A]/10 px-1 py-10 text-sm leading-relaxed text-[#13201A]/55">
-            いま予約できる枠はありません。新しい枠が公開されると、ここに表示されます。
+            いま申し込めるイベントはありません。新しく公開されると、ここに表示され、LINEでもお知らせします。
           </p>
         ) : (
           <ul className="divide-y divide-[#13201A]/10 border-y border-[#13201A]/10">
