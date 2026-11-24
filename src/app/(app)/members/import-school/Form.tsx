@@ -21,6 +21,7 @@ export function ImportForm() {
             <li>会員：新しく{r.members.created}名・登録済み{r.members.existing}名</li>
             <li>12月までのクラスへの在籍：{r.enrollCurrent}件{r.classesCreated.length > 0 && `（クラスを${r.classesCreated.length}つ作成）`}</li>
             <li>1月からのクラスへの在籍：{r.enrollJan}件</li>
+            <li>フリーコース（クラスに属さない別枠）：{r.enrollFree}名</li>
             <li>入金済みの月謝：{r.paid.count}件・¥{r.paid.total.toLocaleString()}</li>
             {!r.dryRun && <li>作成したレッスンの回：{r.lessons}回</li>}
           </ul>

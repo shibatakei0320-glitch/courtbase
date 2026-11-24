@@ -25,7 +25,7 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
   // プランごとに1回（月8回で2クラスなど）
   const planSet = new Map<string, number>();
   for (const e of current.filter((x) => x.startDate <= now)) {
-    const p = e.plan ?? e.schoolClass.plan;
+    const p = e.plan ?? e.schoolClass?.plan;
     if (p) planSet.set(p.id, p.price);
   }
   const monthly = [...planSet.values()].reduce((a, b) => a + b, 0);
@@ -48,14 +48,22 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
             {current.map((e) => (
               <li key={e.id} className="px-4 py-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  {e.schoolClass ? (
                   <span>
                     <Link className="font-medium text-brand-700 hover:underline" href={`/classes/${e.classId}`}>{e.schoolClass.name}</Link>
-                    <span className="ml-2 text-xs text-slate-500">{WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime}{e.schoolClass.level && `・${e.schoolClass.level.name}`}・{(e.plan ?? e.schoolClass.plan)?.name ?? "月謝未設定"}{(e.plan ?? e.schoolClass.plan)?.freeMax ? "（会員ページから予約）" : ""}</span>
+                    <span className="ml-2 text-xs text-slate-500">{WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime}{e.schoolClass.level && `・${e.schoolClass.level.name}`}・{(e.plan ?? e.schoolClass.plan)?.name ?? "月謝未設定"}</span>
                   </span>
+                  ) : (
+                  <span>
+                    <span className="mr-1.5"><Badge tone="blue">フリー</Badge></span>
+                    <span className="font-medium">{e.plan?.name ?? "フリーコース"}</span>
+                    <span className="ml-2 text-xs text-slate-500">クラスに属さず、会員ページから空いている回を予約</span>
+                  </span>
+                  )}
                   <span className="text-xs text-slate-500">{fmtDate(e.startDate)}〜{e.endDate ? `${fmtDate(e.endDate)}まで` : ""}{e.startDate > now && <span className="ml-1"><Badge tone="blue">開始前</Badge></span>}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <details className="relative">
+                  {e.schoolClass && <details className="relative">
                     <summary className="btn-secondary btn-sm cursor-pointer list-none">クラス変更</summary>
                     <div className="absolute left-0 z-10 mt-2 w-80 rounded-lg border bg-white p-4 shadow-lg">
                       <ActionForm action={transferEnrollment} className="space-y-2" confirm="クラスを変更しますか？">
@@ -71,7 +79,7 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
                         <Submit className="btn-primary btn-sm">変更する</Submit>
                       </ActionForm>
                     </div>
-                  </details>
+                  </details>}
                   <details className="relative">
                     <summary className="btn-secondary btn-sm cursor-pointer list-none">{e.endDate ? "最終日を変更" : "退会"}</summary>
                     <div className="absolute left-0 z-10 mt-2 w-72 rounded-lg border bg-white p-4 shadow-lg">
@@ -91,8 +99,8 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
           <ActionForm action={enroll} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="memberId" value={memberId} />
             <label className="block min-w-[14rem] flex-1"><span className="label">クラスを追加（入会・掛け持ち）</span>
-              <select className="input" name="classId" required defaultValue="">
-                <option value="" disabled>選んでください</option>
+              <select className="input" name="classId" defaultValue="">
+                <option value="">（フリーコースはクラス不要）</option>
                 {classes.map((c) => <option key={c.id} value={c.id}>{label(c)}</option>)}
               </select>
             </label>
@@ -104,13 +112,13 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
             </label>
             <label className="block"><span className="label">開始日</span><input className="input" type="date" name="startDate" defaultValue={today} /></label>
             <Submit className="btn-primary">追加</Submit>
-            <p className="w-full text-xs text-slate-500">月8回は、週2クラスに同じプランで在籍登録します（月謝は1回分）。フリーは登録クラスを1つ選ぶと、そのクラスと下のレベルの回を会員が予約できます。</p>
+            <p className="w-full text-xs text-slate-500">月8回は、週2クラスに同じプランで在籍登録します（月謝は1回分）。フリーコースはクラスを選ばず、受講プランだけ選んで登録します（クラスの在籍には数えず、別枠で管理します）。</p>
           </ActionForm>
         </div>
         {past.length > 0 && (
           <details className="border-t px-4 py-3 text-sm">
             <summary className="cursor-pointer text-slate-500">過去の在籍（{past.length}件）</summary>
-            <ul className="mt-2 space-y-1 text-slate-600">{past.map((e) => <li key={e.id}>{e.schoolClass.name}　{fmtDate(e.startDate)}〜{fmtDate(e.endDate)}</li>)}</ul>
+            <ul className="mt-2 space-y-1 text-slate-600">{past.map((e) => <li key={e.id}>{e.schoolClass?.name ?? e.plan?.name ?? "フリー"}　{fmtDate(e.startDate)}〜{fmtDate(e.endDate)}</li>)}</ul>
           </details>
         )}
         {current.length > 0 && (

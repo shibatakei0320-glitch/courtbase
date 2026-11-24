@@ -107,7 +107,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
                   {SCHOOL ? (
                     <td className="!whitespace-normal text-xs">
                       {m.enrollments.length === 0 ? <span className="text-slate-400">在籍なし</span> : m.enrollments.map((e) => (
-                        <span key={e.id} className="block">{WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime} {e.schoolClass.name}<span className="ml-1 text-slate-500">{(e.plan ?? null)?.name ?? ""}</span></span>
+                        <span key={e.id} className="block">{e.schoolClass ? `${WEEKDAYS[e.schoolClass.weekday]} ${e.schoolClass.startTime} ${e.schoolClass.name}` : <span className="font-bold text-blue-800">フリー</span>}<span className="ml-1 text-slate-500">{e.plan?.name ?? ""}</span></span>
                       ))}
                     </td>
                   ) : <td>{m.email ?? "-"}</td>}

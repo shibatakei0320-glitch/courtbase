@@ -202,7 +202,7 @@ export function onLeave(leaves: { fromMonth: string; toMonth: string }[], at: Da
 
 /** 会員の在籍クラスすべてについて出席予定をそろえる（休会・在籍変更の後に呼ぶ） */
 export async function syncMember(memberId: string) {
-  const classIds = [...new Set((await db.enrollment.findMany({ where: { memberId }, select: { classId: true } })).map((e) => e.classId))];
+  const classIds = [...new Set((await db.enrollment.findMany({ where: { memberId, classId: { not: null } }, select: { classId: true } })).map((e) => e.classId!))];
   let added = 0;
   let removed = 0;
   for (const id of classIds) {
@@ -382,7 +382,7 @@ export async function absentableLessons(memberId: string, limit = 10) {
 
 const FREE_ACTIVE = { in: ["RESERVED", "ATTENDED"] } as Prisma.EnumReservationStatusFilter;
 
-/** 会員のフリーコースの登録（在籍中のもの）。登録クラスの段階・区分と、月の上限回数 */
+/** 会員のフリーコースの登録（在籍中のもの）。プランの区分・コース・段階と、月の上限回数（クラスには属さない別枠） */
 export async function freePlansOf(memberId: string, at = new Date()) {
   const list = await db.enrollment.findMany({
     where: { memberId, plan: { freeMax: { not: null } }, member: { status: "ACTIVE" } },
@@ -393,11 +393,12 @@ export async function freePlansOf(memberId: string, at = new Date()) {
     .map((e) => ({
       enrollment: e,
       max: e.plan!.freeMax!,
-      target: e.schoolClass.target,
-      course: e.schoolClass.course,
-      rank: e.schoolClass.level?.rank ?? e.plan!.level?.rank ?? null,
+      target: (e.plan!.target ?? e.schoolClass?.target ?? "JUNIOR") as ClassTarget,
+      course: e.plan!.course ?? e.schoolClass?.course ?? "ACADEMY",
+      rank: e.plan!.level?.rank ?? e.schoolClass?.level?.rank ?? null,
+      label: e.plan!.name,
       // ジュニアのプレーヤーフリーは、中学生以上なら成人アカデミーのプレーヤークラスにも参加できる
-      adultToo: e.schoolClass.target === "JUNIOR" && /^(中|高)/.test(gradeLabel(e.member.birthDate) ?? "") && /プレーヤー/.test(e.schoolClass.level?.name ?? e.plan!.level?.name ?? ""),
+      adultToo: (e.plan!.target ?? e.schoolClass?.target) === "JUNIOR" && /^(中|高)/.test(gradeLabel(e.member.birthDate) ?? "") && /プレーヤー/.test(e.plan!.level?.name ?? e.schoolClass?.level?.name ?? ""),
     }));
 }
 

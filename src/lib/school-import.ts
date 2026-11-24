@@ -22,6 +22,7 @@ export type ImportReport = {
   classesCreated: string[];
   enrollCurrent: number;
   enrollJan: number;
+  enrollFree: number;
   paid: { count: number; total: number };
   lessons: number;
   issues: { name: string; message: string }[];
@@ -91,11 +92,9 @@ function planName(target: ClassTarget, level: string, form: string, academyAdult
   return `ジュニア アカデミー ${level} 月8回`;
 }
 
-/** フリーの登録クラス（今のクラス） */
-const FREE_HOME: Record<string, [string, string]> = { スタンダード: ["火", "17:00"], アドバンス: ["火", "18:00"], プレーヤー: ["火", "19:00"] };
 
 export async function importSchoolMembers(rows: ImportRow[], opts: { dryRun: boolean; generate: boolean }): Promise<ImportReport> {
-  const rep: ImportReport = { dryRun: opts.dryRun, members: { created: 0, existing: 0 }, classesCreated: [], enrollCurrent: 0, enrollJan: 0, paid: { count: 0, total: 0 }, lessons: 0, issues: [] };
+  const rep: ImportReport = { dryRun: opts.dryRun, members: { created: 0, existing: 0 }, classesCreated: [], enrollCurrent: 0, enrollJan: 0, enrollFree: 0, paid: { count: 0, total: 0 }, lessons: 0, issues: [] };
   const issue = (name: string, message: string) => rep.issues.push({ name, message });
 
   // ホームページの時間割・受講プラン（なければ作る）
@@ -164,11 +163,21 @@ export async function importSchoolMembers(rows: ImportRow[], opts: { dryRun: boo
     const paidMonths = MONTHS.filter((mm) => /^\d{1,2}\/\d{1,2}$/.test(r[`入金${mm}月`] ?? ""));
     if (member && paidMonths.length && !opts.dryRun) await db.member.update({ where: { id: member.id }, data: { tuitionMethod: "CASH" } });
 
+    // フリーコース：クラスには入れず、プランだけで登録（別枠。12月まで・1月からとも同じ）
+    if (form === "フリー") {
+      const pid = planId(planName(target, level, form));
+      if (!pid && !opts.dryRun) { issue(full, `フリーの受講プラン（${level}）が見つかりません`); continue; }
+      const exists = member && pid ? await db.enrollment.findFirst({ where: { memberId: member.id, planId: pid, classId: null } }) : null;
+      if (!exists) {
+        rep.enrollFree++;
+        if (!opts.dryRun && member) await db.enrollment.create({ data: { memberId: member.id, planId: pid, classId: null, startDate: fromJst(`${YEAR}-04-01`) } });
+      }
+    }
+
     // 12月まで：今のクラス
     const slots: [string, string][] = [];
-    if (form === "フリー" && FREE_HOME[level]) slots.push(FREE_HOME[level]);
-    for (const i of [1, 2]) if (r[`曜日${i}`] && time(r[`時間${i}`])) slots.push([r[`曜日${i}`], time(r[`時間${i}`])]);
-    if (!slots.length) issue(full, "今のクラス（曜日・時間）がないため、12月までの在籍は登録していません");
+    if (form !== "フリー") for (const i of [1, 2]) if (r[`曜日${i}`] && time(r[`時間${i}`])) slots.push([r[`曜日${i}`], time(r[`時間${i}`])]);
+    if (!slots.length && form !== "フリー") issue(full, "今のクラス（曜日・時間）がないため、12月までの在籍は登録していません");
     for (const [day, t] of slots) {
       const classId = await ensureCurrentClass(target, level, day, t, form);
       if (!classId) continue;
@@ -182,7 +191,7 @@ export async function importSchoolMembers(rows: ImportRow[], opts: { dryRun: boo
 
     // 1月から：ホームページの時間割
     for (const key of ["1月からのクラス1", "1月からのクラス2"]) {
-      const name = r[key];
+      const name = form === "フリー" ? "" : r[key];
       if (!name) continue;
       const c = classCache.get(name);
       if (!c && !opts.dryRun) { issue(full, `1月からのクラス「${name}」が見つかりません`); continue; }
@@ -193,7 +202,7 @@ export async function importSchoolMembers(rows: ImportRow[], opts: { dryRun: boo
       if (c) touched.add(c.id);
       if (!opts.dryRun && member && c) await db.enrollment.create({ data: { memberId: member.id, classId: c.id, planId: pid, startDate: fromJst(JAN_START) } });
     }
-    if (!r["1月からのクラス1"]) issue(full, "1月からのクラスが未定のため、1月からの在籍は登録していません");
+    if (!r["1月からのクラス1"] && form !== "フリー") issue(full, "1月からのクラスが未定のため、1月からの在籍は登録していません");
 
     // 入金（4月〜11月）
     for (const mm of paidMonths) {

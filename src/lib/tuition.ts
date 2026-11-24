@@ -68,17 +68,17 @@ export async function computeLines(memberId: string, month: string): Promise<Lin
   const monthDays = Math.round((end.getTime() - start.getTime()) / 86400_000);
   for (const e of enrollments) {
     const c = e.schoolClass;
-    const plan = e.plan ?? c.plan;
-    const free = plan?.freeMax != null;
-    // フリーは日数、それ以外はその月のレッスン回数（曜日の数）で按分
-    const days = free ? Array.from({ length: monthDays }, (_, i) => addDays(monthRange(month).first, i)) : lessonDays(month, c.weekday);
-    const covered = days.filter((k) => enrollmentCovers(e, fromJst(k, free ? "12:00" : c.startTime))).length;
+    const plan = e.plan ?? c?.plan ?? null;
+    const free = plan?.freeMax != null || !c;
+    // フリー（クラスなし）は日数、それ以外はその月のレッスン回数（曜日の数）で按分
+    const days = free || !c ? Array.from({ length: monthDays }, (_, i) => addDays(monthRange(month).first, i)) : lessonDays(month, c.weekday);
+    const covered = days.filter((k) => enrollmentCovers(e, fromJst(k, free || !c ? "12:00" : c.startTime))).length;
     if (covered === 0) continue;
     if (!plan) {
-      lines.push({ label: `${c.name}（月謝未設定）`, amount: 0 });
+      lines.push({ label: `${c?.name ?? "フリー"}（月謝未設定）`, amount: 0 });
       continue;
     }
-    if (!plan.lessonsPerMonth && !free) {
+    if (!plan.lessonsPerMonth && !free && c) {
       // 回数の決まっていないプラン：クラスごとに月謝
       const partial = covered < days.length;
       const amount = partial && cfg.prorate ? Math.round((plan.price * covered) / days.length / 10) * 10 : plan.price;
@@ -86,7 +86,7 @@ export async function computeLines(memberId: string, month: string): Promise<Lin
       continue;
     }
     const g = groups.get(plan.id) ?? { plan, names: [], covered: 0, total: 0 };
-    g.names.push(free ? `${c.name}（登録）` : c.name);
+    g.names.push(c ? c.name : "フリー");
     g.covered += covered;
     g.total += days.length;
     groups.set(plan.id, g);
@@ -101,7 +101,7 @@ export async function computeLines(memberId: string, month: string): Promise<Lin
     const amount = partial && cfg.prorate ? Math.round((full * ratio) / 10) * 10 : full;
     const extra = units > 1 ? `・${units}クラス${g.plan.extraDiscount ? `（2クラス目から${g.plan.extraDiscount.toLocaleString()}円引き）` : ""}` : "";
     const pro = partial && cfg.prorate ? (free ? `（${g.covered}/${g.total}日）` : `（${g.covered}/${g.total}回）`) : "";
-    lines.push({ label: `${g.plan.name}${extra}${pro}　${g.names.join("・")}`, amount });
+    lines.push({ label: `${g.plan.name}${extra}${pro}${free ? "" : `　${g.names.join("・")}`}`, amount });
   }
   // 入会金：この月より前に在籍がなく、この月に在籍が始まる
   if (cfg.admissionFee > 0 && earlier === 0 && enrollments.some((e) => e.startDate >= start)) {

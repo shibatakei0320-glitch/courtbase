@@ -143,18 +143,29 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
           <p className={`${ui.card} text-base text-[#5B6661]`}>在籍しているクラスはありません。お申し込みはスクールにご連絡ください。</p>
         ) : (
           <ul className="space-y-3">
-            {current.map((e) => (
+            {current.map((e) => {
+              const c = e.schoolClass;
+              if (!c) return (
+                <li key={e.id} className={ui.card}>
+                  <p className="text-base font-bold">フリーコース<span className="ml-2 align-middle"><Chip tone="info">フリー</Chip></span></p>
+                  {e.plan && <p className="mt-0.5 text-sm">{e.plan.name}</p>}
+                  <p className="mt-1 text-sm text-[#5B6661]">クラスは決まっていません。<Link href={`/my/school/free?m=${who.id}`} className={ui.link}>空いている回を予約</Link>して参加します。</p>
+                  {e.endDate && <p className="mt-1 text-sm text-[#C2410C]">{fmtDate(e.endDate)}まで</p>}
+                </li>
+              );
+              return (
               <li key={e.id} className={ui.card}>
-                <p className="text-base font-bold">{e.schoolClass.name}{e.schoolClass.target === "JUNIOR" && <span className="ml-2 align-middle"><Chip tone="info">{TARGET_LABEL.JUNIOR}</Chip></span>}</p>
+                <p className="text-base font-bold">{c.name}{c.target === "JUNIOR" && <span className="ml-2 align-middle"><Chip tone="info">{TARGET_LABEL.JUNIOR}</Chip></span>}</p>
                 {e.plan && <p className="mt-0.5 text-sm">{e.plan.name}</p>}
                 <p className="mt-1 text-sm text-[#5B6661]">
-                  毎週{WEEKDAYS[e.schoolClass.weekday]}曜日 {e.schoolClass.startTime}〜（{e.schoolClass.durationMin}分）・{e.schoolClass.court.name}
-                  {e.schoolClass.level && `・${e.schoolClass.level.name}`}{e.schoolClass.coach && `・コーチ ${e.schoolClass.coach.name}`}
+                  毎週{WEEKDAYS[c.weekday]}曜日 {c.startTime}〜（{c.durationMin}分）・{c.court.name}
+                  {c.level && `・${c.level.name}`}{c.coach && `・コーチ ${c.coach.name}`}
                 </p>
                 {e.endDate && <p className="mt-1 text-sm text-[#C2410C]">{fmtDate(e.endDate)}のレッスンまで</p>}
                 {e.startDate > now && <p className="mt-1 text-sm text-[#0B6B4F]">{fmtDate(e.startDate)}から</p>}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

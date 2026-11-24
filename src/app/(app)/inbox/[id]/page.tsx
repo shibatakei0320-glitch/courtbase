@@ -134,7 +134,7 @@ async function MemberPanel({ memberId, contactId, child }: { memberId: string; c
         <Link href={`/members/${m.id}`} className="font-semibold text-brand-700 hover:underline">{m.lastName} {m.firstName}</Link>
         <span className="ml-2 text-xs text-slate-500">No.{String(m.memberNo).padStart(6, "0")}</span>
         {m.status !== "ACTIVE" && <span className="ml-2"><Badge tone="yellow">休会・退会</Badge></span>}
-        <p className="mt-2 text-xs text-slate-500">{classes.length ? classes.map((e) => e.schoolClass.name).join("、") : "在籍クラスなし"}</p>
+        <p className="mt-2 text-xs text-slate-500">{classes.length ? classes.map((e) => e.schoolClass?.name ?? "フリー").join("、") : "在籍クラスなし"}</p>
         {m.phone && <p className="mt-1 text-xs text-slate-500">{m.phone}</p>}
       </div>
 

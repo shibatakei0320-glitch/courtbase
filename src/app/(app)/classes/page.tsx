@@ -6,6 +6,7 @@ import { WEEKDAYS, enrollmentCovers } from "@/lib/school";
 import { ClassForm } from "./ClassForm";
 import { GenerateForm } from "./GenerateForm";
 import { Timetable } from "./Timetable";
+import { FreeMembers } from "./FreeMembers";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { applyTemplate } from "./actions";
 
@@ -53,6 +54,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
             </nav>
           )}
           {shown.length > 0 && <Timetable classes={shown.map((c) => ({ ...c, enrolled: c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now).length }))} />}
+          <FreeMembers />
           {classes.length === 0 && manage && (
             <div className="card border-brand-500 p-5">
               <h2 className="font-semibold">48K萩校の時間割・料金をまとめて登録</h2>

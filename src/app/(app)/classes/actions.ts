@@ -101,10 +101,14 @@ export async function generateClassLessons(_: ActionState, fd: FormData): Promis
 export async function enroll(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff();
   const classId = str(fd, "classId");
+  // フリーコース：クラスには入れず、プランだけで登録（別枠）
+  const freePlan = optStr(fd, "planId") ? await db.plan.findUnique({ where: { id: str(fd, "planId") } }) : null;
+  if (freePlan?.freeMax != null) return enrollFree(me.id, str(fd, "memberId"), freePlan.id, str(fd, "startDate") || todayKey());
   const memberId = str(fd, "memberId");
   const start = str(fd, "startDate") || todayKey();
   if (!DATE.test(start)) return { error: "開始日を正しく入力してください" };
   const [c, m] = await Promise.all([db.schoolClass.findUnique({ where: { id: classId } }), db.member.findUnique({ where: { id: memberId } })]);
+  if (!classId) return { error: "クラスを選んでください（フリーコースの場合は受講プランでフリーを選びます）" };
   if (!c || !m) return { error: "クラスまたは会員が見つかりません" };
   if (m.status !== "ACTIVE") return { error: "有効な会員ではありません（休会・退会中）" };
   const startDate = fromJst(start);
@@ -143,10 +147,10 @@ export async function endEnrollment(_: ActionState, fd: FormData): Promise<Actio
   } else {
     await db.enrollment.update({ where: { id }, data: { endDate } });
   }
-  const s = await syncClassReservations(e.classId, e.memberId);
+  const s = e.classId ? await syncClassReservations(e.classId, e.memberId) : { added: 0, removed: 0 };
   await expireCreditsAfter(e.memberId);
-  await audit(me.id, "class.unenroll", e.classId, `${e.memberId} 〜${end}`);
-  revalidatePath(`/classes/${e.classId}`);
+  await audit(me.id, "class.unenroll", e.classId ?? "free", `${e.memberId} 〜${end}`);
+  revalidatePath("/classes", "layout");
   revalidatePath(`/members/${e.memberId}`);
   return { ok: `在籍を${fmtDate(endDate)}までにしました（以降の${s.removed}回の出席予定を消しました）` };
 }
@@ -176,6 +180,7 @@ export async function transferEnrollment(_: ActionState, fd: FormData): Promise<
   const me = await requireStaff();
   const e = await db.enrollment.findUnique({ where: { id: str(fd, "id") }, include: { schoolClass: true, member: true } });
   if (!e) return { error: "在籍が見つかりません" };
+  if (!e.classId || !e.schoolClass) return { error: "フリーコースはクラスに属さないため、クラス変更はできません（受講プランを変える場合は、終了して登録し直してください）" };
   const date = str(fd, "date");
   if (!DATE.test(date)) return { error: "変更日を入力してください" };
   const to = await db.schoolClass.findUnique({ where: { id: str(fd, "classId") } });
@@ -191,9 +196,9 @@ export async function transferEnrollment(_: ActionState, fd: FormData): Promise<
     lastDay < e.startDate ? db.enrollment.delete({ where: { id: e.id } }) : db.enrollment.update({ where: { id: e.id }, data: { endDate: lastDay } }),
     db.enrollment.create({ data: { classId: to.id, memberId: e.memberId, startDate, endDate: e.endDate, planId: optStr(fd, "planId") ?? e.planId ?? to.planId } }),
   ]);
-  await syncClassReservations(e.classId, e.memberId);
+  await syncClassReservations(e.classId!, e.memberId);
   const s = await syncClassReservations(to.id, e.memberId);
-  await audit(me.id, "class.transfer", e.memberId, `${e.schoolClass.name} → ${to.name} ${date}〜`);
+  await audit(me.id, "class.transfer", e.memberId, `${e.schoolClass!.name} → ${to.name} ${date}〜`);
   revalidatePath(`/members/${e.memberId}`);
   return { ok: `${fmtDate(startDate)}から「${to.name}」に変更しました（出席予定 ${s.added}回）` };
 }
@@ -275,4 +280,20 @@ export async function applyTemplate(_: ActionState, _fd: FormData): Promise<Acti
   await audit(me.id, "class.template", "48K萩校", JSON.stringify(r));
   revalidatePath("/classes", "layout");
   return { ok: `登録しました：クラス ${r.classes}・受講プラン ${r.plans}・段階 ${r.levels}・コート ${r.courts}（すでにあるものはそのまま）。振替のルールとクール制も設定しました` };
+}
+
+/** フリーコースの登録（クラスに属さない別枠。会員が空いている回を予約する） */
+async function enrollFree(staffId: string, memberId: string, planId: string, start: string): Promise<ActionState> {
+  if (!DATE.test(start)) return { error: "開始日を正しく入力してください" };
+  const [m, plan] = await Promise.all([db.member.findUnique({ where: { id: memberId } }), db.plan.findUnique({ where: { id: planId } })]);
+  if (!m || !plan) return { error: "会員またはプランが見つかりません" };
+  if (m.status !== "ACTIVE") return { error: "有効な会員ではありません（休会・退会中）" };
+  const startDate = fromJst(start);
+  const dup = await db.enrollment.findFirst({ where: { memberId, planId, classId: null, OR: [{ endDate: null }, { endDate: { gte: startDate } }] } });
+  if (dup) return { error: "この会員はすでにこのフリーコースに登録されています" };
+  await db.enrollment.create({ data: { memberId, planId, classId: null, startDate } });
+  await audit(staffId, "class.enroll_free", memberId, `${m.lastName} ${m.firstName} ${plan.name} ${start}〜`);
+  revalidatePath("/classes", "layout");
+  revalidatePath(`/members/${memberId}`);
+  return { ok: `${m.lastName} ${m.firstName}さんを「${plan.name}」で登録しました（クラスには入らず、月${plan.freeMax}回まで会員ページから空いている回を予約できます）` };
 }

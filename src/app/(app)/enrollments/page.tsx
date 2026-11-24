@@ -16,7 +16,7 @@ export default async function EnrollmentsPage({ searchParams }: { searchParams: 
   const [enrollments, leaves] = await Promise.all([
     db.enrollment.findMany({
       where: { startDate: { lt: end }, OR: [{ endDate: null }, { endDate: { gte: start } }] },
-      include: { member: true, schoolClass: { include: { plan: true, level: true } } },
+      include: { member: true, plan: true, schoolClass: { include: { plan: true, level: true } } },
       orderBy: [{ member: { lastKana: "asc" } }, { startDate: "asc" }],
     }),
     db.leave.findMany({ where: { fromMonth: { lte: month }, toMonth: { gte: month } }, include: { member: true } }),
@@ -27,6 +27,8 @@ export default async function EnrollmentsPage({ searchParams }: { searchParams: 
   for (const e of enrollments) byMember.set(e.memberId, [...(byMember.get(e.memberId) ?? []), e]);
   const rows = [...byMember.values()];
 
+  const nm = (e: (typeof enrollments)[number]) => (e.schoolClass ? e.schoolClass.name : `フリー：${e.plan?.name ?? ""}`);
+  const price = (e: (typeof enrollments)[number]) => (e.plan ?? e.schoolClass?.plan)?.price ?? 0;
   // 今月の異動
   const prevIds = new Set((await db.enrollment.findMany({ where: { startDate: { lt: start } }, select: { memberId: true } })).map((e) => e.memberId));
   const moves: { date: Date; kind: string; tone: "green" | "blue" | "red" | "yellow"; who: { id: string; name: string }; detail: string }[] = [];
@@ -35,17 +37,17 @@ export default async function EnrollmentsPage({ searchParams }: { searchParams: 
     const sibling = byMember.get(e.memberId) ?? [];
     if (e.startDate >= start) {
       const from = sibling.find((o) => o.id !== e.id && o.endDate && Math.abs(o.endDate.getTime() + 86400_000 - e.startDate.getTime()) < 86400_000 * 2);
-      if (from) moves.push({ date: e.startDate, kind: "クラス変更", tone: "blue", who, detail: `${from.schoolClass.name} → ${e.schoolClass.name}` });
-      else moves.push({ date: e.startDate, kind: prevIds.has(e.memberId) ? "クラス追加" : "入会", tone: "green", who, detail: e.schoolClass.name });
+      if (from) moves.push({ date: e.startDate, kind: "クラス変更", tone: "blue", who, detail: `${nm(from)} → ${nm(e)}` });
+      else moves.push({ date: e.startDate, kind: prevIds.has(e.memberId) ? "クラス追加" : "入会", tone: "green", who, detail: nm(e) });
     }
     if (e.endDate && e.endDate < end) {
       const to = sibling.find((o) => o.id !== e.id && Math.abs(o.startDate.getTime() - (e.endDate!.getTime() + 86400_000)) < 86400_000 * 2);
-      if (!to) moves.push({ date: e.endDate, kind: "退会", tone: "red", who, detail: `${e.schoolClass.name}（${fmtDate(e.endDate)}まで）` });
+      if (!to) moves.push({ date: e.endDate, kind: "退会", tone: "red", who, detail: `${nm(e)}（${fmtDate(e.endDate)}まで）` });
     }
   }
   for (const l of leaves) if (l.fromMonth === month) moves.push({ date: start, kind: "休会", tone: "yellow", who: { id: l.memberId, name: `${l.member.lastName} ${l.member.firstName}` }, detail: `${l.fromMonth}〜${l.toMonth}${l.reason ? ` ${l.reason}` : ""}` });
   moves.sort((a, b) => a.date.getTime() - b.date.getTime());
-  const fee = rows.filter((r) => !onLeave.has(r[0].memberId)).reduce((a, r) => a + r.filter((e) => !e.endDate || e.endDate >= end).reduce((x, e) => x + (e.schoolClass.plan?.price ?? 0), 0), 0);
+  const fee = rows.filter((r) => !onLeave.has(r[0].memberId)).reduce((a, r) => a + r.filter((e) => !e.endDate || e.endDate >= end).reduce((x, e) => x + price(e), 0), 0);
 
   return (
     <>
@@ -87,13 +89,13 @@ export default async function EnrollmentsPage({ searchParams }: { searchParams: 
                       <td className="text-sm">
                         {r.map((e) => (
                           <span key={e.id} className="block">
-                            {WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime} {e.schoolClass.name}
+                            {e.schoolClass ? `${WEEKDAYS[e.schoolClass.weekday]} ${e.schoolClass.startTime} ${e.schoolClass.name}` : <><span className="mr-1 rounded bg-blue-100 px-1 text-[11px] font-bold text-blue-800">フリー</span>{e.plan?.name}</>}
                             {e.startDate >= start && <span className="ml-1 text-xs text-emerald-700">{fmtDate(e.startDate).slice(5)}〜</span>}
                             {e.endDate && e.endDate < end && <span className="ml-1 text-xs text-red-700">〜{fmtDate(e.endDate).slice(5)}</span>}
                           </span>
                         ))}
                       </td>
-                      <td className="whitespace-nowrap text-right text-sm">{onLeave.has(m.id) ? "休会" : yen(r.reduce((a, e) => a + (e.schoolClass.plan?.price ?? 0), 0))}</td>
+                      <td className="whitespace-nowrap text-right text-sm">{onLeave.has(m.id) ? "休会" : yen(r.reduce((a, e) => a + price(e), 0))}</td>
                     </tr>
                   );
                 })}

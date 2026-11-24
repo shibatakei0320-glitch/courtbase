@@ -39,7 +39,7 @@ export default async function FreePage({ searchParams }: { searchParams: Promise
         <>
           <div className={ui.card}>
             <p className="text-base">今月の利用 <b className="text-2xl">{usedNow}</b> / {max}回</p>
-            <p className="mt-1 text-sm text-[#5B6661]">登録クラス：{plans.map((p) => p.enrollment.schoolClass.name).join("、")}。そのクラスと下のレベルの回から選べます。</p>
+            <p className="mt-1 text-sm text-[#5B6661]">{plans.map((p) => p.label).join("、")}。登録している段階とその下のレベルの回から選べます。</p>
           </div>
           {slots.length === 0 ? (
             <p className={`${ui.card} text-base text-[#5B6661]`}>いま予約できる回はありません。</p>

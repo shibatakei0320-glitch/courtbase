@@ -503,16 +503,16 @@ model SchoolClass {
 
 /// クラスへの在籍。startDate〜endDate（含む、JSTの日付の0時）の回に自動で出席予定が入る
 model Enrollment {
-  id          String      @id @default(cuid())
-  classId     String
-  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  classId     String? // フリーコースはクラスなし（プランの段階・区分で予約できる回が決まる）
+  schoolClass SchoolClass? @relation(fields: [classId], references: [id], onDelete: Cascade)
   memberId    String
-  member      Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member      Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
   startDate   DateTime
   endDate     DateTime?
   planId      String? // 受講プラン（月謝の計算に使う。なければクラスの月謝）
-  plan        Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
-  createdAt   DateTime    @default(now())
+  plan        Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
 
   @@index([classId])
   @@index([memberId])
