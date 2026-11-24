@@ -36,7 +36,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
       <PageHeader
         title={`${member.lastName} ${member.firstName}${gradeLabel(member.birthDate) ? `（${gradeLabel(member.birthDate)}）` : ""}`}
         back="/members"
-        actions={<>{contact && <Link className="btn-secondary" href={`/inbox/${contact.id}?f=all`}>LINEの会話</Link>}<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link></>}
+        actions={<>{SCHOOL && contact && <Link className="btn-secondary" href={`/inbox/${contact.id}?f=all`}>LINEの会話</Link>}<Link className="btn-secondary" href={`/payments?member=${member.id}#new`}>入金登録</Link></>}
       />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="会員番号" value={String(member.memberNo).padStart(6, "0")} />

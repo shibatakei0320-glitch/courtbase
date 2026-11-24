@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [setting, open] = await Promise.all([db.setting.findUnique({ where: { id: 1 } }), db.lineContact.count({ where: { needsReply: true } })]);
   const items: NavItem[] = [
     { href: "/dashboard", label: "ダッシュボード" },
-    { href: "/inbox", label: open > 0 ? `LINE受信箱（${open}）` : "LINE受信箱" },
+    ...(SCHOOL ? [{ href: "/inbox", label: open > 0 ? `LINE受信箱（${open}）` : "LINE受信箱" }] : []),
     ...(setting?.facilityMode ? [{ href: "/checkin", label: "入退場（QR）" }] : []),
     { href: "/schedule", label: "スケジュール" },
     { href: "/reservations", label: "予約一覧" },

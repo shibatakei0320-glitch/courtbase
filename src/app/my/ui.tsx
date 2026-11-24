@@ -1,3 +1,4 @@
+import { TENNIS } from "@/lib/brand";
 // 会員ページ用の部品（シンプル・大きめの文字とボタン・はっきりした色）
 
 const TZ = "Asia/Tokyo";
@@ -33,8 +34,7 @@ export function Chip({ tone, children }: { tone: "ok" | "warn" | "off" | "info";
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${c}`}>{children}</span>;
 }
 
-/** 細い線で描いたコート（右寄せ・装飾）。NEXT_PUBLIC_SPORT=tennis ならテニスコート */
-const TENNIS = process.env.NEXT_PUBLIC_SPORT === "tennis";
+/** 細い線で描いたコート（右寄せ・装飾）。テニススクールならテニスコート */
 export function Court({ className = "", stroke = "white", opacity = 0.22 }: { className?: string; stroke?: string; opacity?: number }) {
   return (
     <svg viewBox="0 0 220 440" aria-hidden className={`pointer-events-none absolute ${className}`}>
