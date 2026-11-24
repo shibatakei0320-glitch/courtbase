@@ -22,6 +22,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           { href: "/classes", label: "クラス", section: "スクール" },
           { href: "/enrollments", label: "在籍台帳", section: "スクール" },
           { href: "/makeups", label: "振替", section: "スクール" },
+          { href: "/tournaments", label: "協会・外部の大会", section: "スクール" },
+          { href: "/strings", label: "ガット張替", section: "スクール" },
           { href: "/tuition", label: "月謝", section: "お金" },
           { href: "/payments", label: "売上", section: "お金" },
         ]

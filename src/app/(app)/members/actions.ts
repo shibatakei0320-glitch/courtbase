@@ -1,7 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, type MemberStatus } from "@prisma/client";
+import { Prisma, type MemberStatus, type PaymentMethod } from "@prisma/client";
+import { isBankKana, toBankKana } from "@/lib/zengin";
 import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -23,11 +24,49 @@ function memberData(fd: FormData) {
     planId: optStr(fd, "planId"),
     status: ["ACTIVE", "SUSPENDED", "WITHDRAWN"].includes(status) ? status : "ACTIVE",
     note: optStr(fd, "note"),
+    ...profileData(fd),
   };
+}
+
+const kana = (fd: FormData, k: string) => (optStr(fd, k) ? toBankKana(str(fd, k)) : null);
+const year = (fd: FormData, k: string) => (/^\d{4}$/.test(str(fd, k)) ? Number(str(fd, k)) : null);
+
+/** 大会・緊急連絡先・健康・保険、月謝の払い方と口座（フォームにある項目だけ更新する） */
+function profileData(fd: FormData) {
+  const d: Record<string, unknown> = {};
+  if (fd.has("associationNo")) Object.assign(d, { associationName: optStr(fd, "associationName"), associationNo: optStr(fd, "associationNo") });
+  if (fd.has("emergencyName"))
+    Object.assign(d, {
+      emergencyName: optStr(fd, "emergencyName"),
+      emergencyRelation: optStr(fd, "emergencyRelation"),
+      emergencyPhone: optStr(fd, "emergencyPhone"),
+      medicalNote: optStr(fd, "medicalNote"),
+      insuranceYear: year(fd, "insuranceYear"),
+      schoolName: optStr(fd, "schoolName"),
+    });
+  if (fd.has("tuitionMethod")) {
+    const method = str(fd, "tuitionMethod") as PaymentMethod;
+    Object.assign(d, {
+      tuitionMethod: ["CASH", "TRANSFER", "DEBIT", "CARD", "OTHER"].includes(method) ? method : "CASH",
+      bankCode: optStr(fd, "bankCode"),
+      bankName: kana(fd, "bankName") ?? (str(fd, "bankCode") === "0170" ? "ﾔﾏｸﾞﾁ" : null),
+      branchCode: optStr(fd, "branchCode"),
+      branchName: kana(fd, "branchName"),
+      accountType: str(fd, "accountType") === "2" ? 2 : str(fd, "accountType") === "1" ? 1 : null,
+      accountNo: optStr(fd, "accountNo")?.replace(/\D/g, "") || null,
+      accountHolder: kana(fd, "accountHolder"),
+    });
+  }
+  return d as Partial<{ tuitionMethod: PaymentMethod; bankCode: string | null; bankName: string | null; branchCode: string | null; branchName: string | null; accountType: number | null; accountNo: string | null; accountHolder: string | null; associationName: string | null; associationNo: string | null; emergencyName: string | null; emergencyRelation: string | null; emergencyPhone: string | null; medicalNote: string | null; insuranceYear: number | null; schoolName: string | null }>;
 }
 
 function check(d: ReturnType<typeof memberData>): string | null {
   if (!d.lastName || !d.firstName) return "氏名（姓・名）を入力してください";
+  if (d.accountHolder && !isBankKana(d.accountHolder)) return "預金者名はカナで入力してください（漢字は使えません）";
+  if (d.bankCode && !/^\d{4}$/.test(d.bankCode)) return "金融機関コードは4桁の数字です（山口銀行は0170）";
+  if (d.branchCode && !/^\d{3}$/.test(d.branchCode)) return "支店コードは3桁の数字です";
+  if (d.accountNo && !/^\d{1,7}$/.test(d.accountNo)) return "口座番号は7桁までの数字です";
+  if (d.tuitionMethod === "DEBIT" && (!d.bankCode || !d.branchCode || !d.accountNo || !d.accountHolder)) return "口座振替にする場合は、口座の情報をすべて入力してください";
   if (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) return "メールアドレスの形式が正しくありません";
   return null;
 }

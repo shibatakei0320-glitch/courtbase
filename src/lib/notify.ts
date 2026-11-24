@@ -103,3 +103,27 @@ export async function notifyLessonCanceled(reservationId: string) {
   if (!x) return;
   await pushLine(lineTo(x.r.member), `【${x.name}】次のレッスンは休講になりました。申し訳ありません。\n\n${body(x.r)}\n\n振替が1回分付いています。「振替予約」から空きのある回を選べます。\n${appUrl()}/my/school`);
 }
+
+/** 口座振替ができなかったことのお知らせ */
+export async function notifyDebitFailed(invoiceId: string, reason: string) {
+  const inv = await db.invoice.findUnique({ where: { id: invoiceId }, include: { member: { include: { guardian: true } } } });
+  if (!inv) return false;
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  const who = inv.member.guardianId ? `（${inv.member.lastName} ${inv.member.firstName}さん分）` : "";
+  return pushLine(
+    lineTo(inv.member),
+    `【${s?.facilityName ?? BRAND}】${Number(inv.month.slice(5))}月分の月謝${who}${yen(inv.amount)}を、口座から引き落とせませんでした（${reason}）。\n\nお手数ですが、次回のレッスンの際に受付で現金でお支払いいただくか、スクールにご連絡ください。`,
+  );
+}
+
+/** ガットの仕上がりのお知らせ */
+export async function notifyStringDone(jobId: string) {
+  const j = await db.stringJob.findUnique({ where: { id: jobId }, include: { member: { include: { guardian: true } } } });
+  if (!j?.member) return false;
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  if (s && !s.stringNotify) return false;
+  return pushLine(
+    lineTo(j.member),
+    `【${s?.facilityName ?? BRAND}】ガットの張り替えが仕上がりました。\n\nラケット：${j.racket}\nガット：${j.stringName}（${j.tension}）${j.price > 0 ? `\n料金：${yen(j.price)}` : ""}\n\n受付でお渡しします。次回のレッスンの際などにお受け取りください。`,
+  );
+}

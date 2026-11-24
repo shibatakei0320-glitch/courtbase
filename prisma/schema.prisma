@@ -60,6 +60,7 @@ enum PaymentMethod {
   CASH
   CARD
   TRANSFER
+  DEBIT // 口座振替（自動引き落とし）
   OTHER
 }
 
@@ -127,8 +128,34 @@ model Member {
   note       String?
   lineUserId String?      @unique
   externalId String?      @unique // 移行元（hacomono 等）の会員ID
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+
+  // 月謝の払い方と、口座振替の口座（預金者名は半角カナ）
+  tuitionMethod    PaymentMethod @default(CASH)
+  bankCode         String? // 金融機関コード4桁（山口銀行 0170）
+  bankName         String? // 金融機関名（半角カナ）
+  branchCode       String? // 支店コード3桁
+  branchName       String? // 支店名（半角カナ）
+  accountType      Int? // 1=普通 2=当座
+  accountNo        String? // 口座番号7桁
+  accountHolder    String? // 預金者名（半角カナ）
+  debitFirstSentAt DateTime? // 初めて振替依頼を出した日（新規コードの判定）
+
+  // 大会・協会
+  associationName String? // 登録団体（例：山口県テニス協会）
+  associationNo   String? // 登録番号
+
+  // 緊急連絡先・健康・保険
+  emergencyName     String?
+  emergencyRelation String?
+  emergencyPhone    String?
+  medicalNote       String? // 持病・アレルギーなど配慮すること
+  insuranceYear     Int? // スポーツ安全保険の加入年度
+  schoolName        String? // 学校名（ジュニア）
+
+  stringJobs        StringJob[]
+  tournamentEntries TournamentEntry[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   reservations Reservation[]
   payments     Payment[]
@@ -301,6 +328,17 @@ model Setting {
   admissionFee         Int     @default(0) // 入会金（初めての月謝に加算）
   leaveFee             Int     @default(0) // 休会費（休会中の月）
   prorateMidMonth      Boolean @default(true) // 月の途中の入会・退会は回数で按分
+  // 口座振替（全銀協フォーマットの依頼データ）
+  debitConsignorCode   String? // 委託者コード（10桁、銀行から通知）
+  debitConsignorName   String? // 委託者名（半角カナ）
+  debitBankCode        String  @default("0170") // 取引銀行（山口銀行）
+  debitBankName        String  @default("ﾔﾏｸﾞﾁ")
+  debitBranchCode      String? // 取引支店コード
+  debitBranchName      String? // 取引支店名（半角カナ）
+  debitAccountType     Int     @default(1)
+  debitAccountNo       String? // 委託者の口座番号
+  debitDay             Int     @default(27) // 引落日（毎月）
+  stringNotify         Boolean @default(true) // ガットの仕上がりをLINEで連絡
   facilityMode         Boolean @default(false) // 施設の予約・入退場（QR）を使う
   // 特定商取引法に基づく表記
   legalSeller          String?
@@ -542,19 +580,93 @@ enum InvoiceStatus {
 
 /// 月謝の請求（会員×月）。lines は [{ label, amount }]
 model Invoice {
-  id        String        @id @default(cuid())
-  memberId  String
-  member    Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  month     String // "YYYY-MM"
-  amount    Int
-  lines     Json
-  status    InvoiceStatus @default(UNPAID)
-  paidAt    DateTime?
-  paymentId String?       @unique
-  note      String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id          String        @id @default(cuid())
+  memberId    String
+  member      Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  month       String // "YYYY-MM"
+  amount      Int
+  lines       Json
+  status      InvoiceStatus @default(UNPAID)
+  paidAt      DateTime?
+  paymentId   String?       @unique
+  note        String?
+  debitSentAt DateTime? // 口座振替の依頼データに入れた日時
+  debitResult String? // 振替結果コード（0=振替済 1=資金不足 2=取引なし 3=預金者都合 4=依頼書なし 8=委託者都合 9=その他）
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@unique([memberId, month])
   @@index([month, status])
+}
+
+enum StringStatus {
+  RECEIVED // 受付
+  DONE // 仕上がり
+  DELIVERED // 受け渡し済み
+  CANCELED
+}
+
+/// ガット張替（ストリンギング）
+model StringJob {
+  id          String       @id @default(cuid())
+  memberId    String?
+  member      Member?      @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  customer    String? // 会員以外のお客さまの名前
+  racket      String // メーカー・モデル
+  stringName  String // ガットの種類
+  tension     String // 例：48 / 46（ポンド）
+  note        String?
+  price       Int          @default(0)
+  status      StringStatus @default(RECEIVED)
+  receivedAt  DateTime     @default(now())
+  dueAt       DateTime? // 仕上がり予定
+  doneAt      DateTime?
+  deliveredAt DateTime?
+  paymentId   String?      @unique
+  staffId     String?
+  createdAt   DateTime     @default(now())
+
+  @@index([status, receivedAt])
+  @@index([memberId])
+}
+
+/// 協会などが主催する大会（スクール外）。会員の申込みをまとめて協会に提出する
+model Tournament {
+  id            String    @id @default(cuid())
+  name          String
+  organizer     String // 主催（例：山口県テニス協会）
+  date          DateTime // 開催日
+  venue         String?
+  entryDeadline DateTime? // スクール内の申込締切
+  fee           Int       @default(0) // 参加費（1エントリー）
+  categories    String[]  @default([]) // 種目（例：一般男子ダブルス）
+  description   String?
+  published     Boolean   @default(true) // 会員ページに表示
+  createdAt     DateTime  @default(now())
+
+  entries TournamentEntry[]
+
+  @@index([date])
+}
+
+enum EntryStatus {
+  ENTERED // 申込み
+  SUBMITTED // 協会に提出済み
+  CANCELED
+}
+
+model TournamentEntry {
+  id           String      @id @default(cuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category     String
+  partner      String? // ペアの名前（ダブルス）
+  note         String?
+  status       EntryStatus @default(ENTERED)
+  paymentId    String?     @unique // 参加費の入金
+  createdAt    DateTime    @default(now())
+
+  @@unique([tournamentId, memberId, category])
 }

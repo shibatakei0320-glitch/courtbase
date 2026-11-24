@@ -7,6 +7,7 @@ import { MEMBER_STATUS, PAY_METHOD, RES_STATUS, fmtDate, fmtDateTime, yen } from
 import { MemberForm } from "../MemberForm";
 import { EnrollmentPanel } from "./EnrollmentPanel";
 import { FamilyPanel } from "./FamilyPanel";
+import { ExtrasPanel } from "./ExtrasPanel";
 import { SCHOOL } from "@/lib/brand";
 import { gradeLabel } from "@/lib/school";
 import { updateMember } from "../actions";
@@ -42,6 +43,13 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
         <Stat label="ステータス" value={<span className="flex gap-1"><Badge tone={member.status === "ACTIVE" ? "green" : "yellow"}>{MEMBER_STATUS[member.status]}</Badge>{member.lineUserId && <Badge tone="blue">LINE連携</Badge>}</span>} />
         <Stat label="累計入金" value={yen(total)} />
       </div>
+      {(member.medicalNote || member.emergencyPhone) && (
+        <div className="card mb-4 border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {member.medicalNote && <p><b>配慮すること：</b>{member.medicalNote}</p>}
+          {member.emergencyPhone && <p><b>緊急連絡先：</b>{member.emergencyName ?? ""}{member.emergencyRelation ? `（${member.emergencyRelation}）` : ""} {member.emergencyPhone}</p>}
+          {SCHOOL && member.insuranceYear !== null && member.insuranceYear < new Date().getFullYear() && <p><b>スポーツ安全保険：</b>{member.insuranceYear}年度まで（今年度は未加入）</p>}
+        </div>
+      )}
       <div className={SCHOOL ? "grid gap-4 lg:grid-cols-3" : ""}>
         <div className={`card p-6 ${SCHOOL ? "lg:col-span-2" : ""}`}>
           <h2 className="mb-4 font-semibold">会員情報</h2>
@@ -55,6 +63,8 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
         <>
           <h2 className="mb-3 mt-8 font-semibold">在籍管理</h2>
           <EnrollmentPanel memberId={member.id} />
+          <h2 className="mb-3 mt-8 font-semibold">ガット・大会</h2>
+          <ExtrasPanel memberId={member.id} />
         </>
       )}
 

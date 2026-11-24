@@ -385,3 +385,37 @@ export async function addChild(_: ActionState, fd: FormData): Promise<ActionStat
   revalidatePath("/my", "layout");
   return { ok: `${firstName}さんを登録しました。クラスのお申し込みはスクールにご連絡ください` };
 }
+
+// ---- 協会・外部の大会への申込み ----
+
+export async function applyTournament(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const who = await familyMember(me, str(fd, "memberId"));
+  if (!who) return { error: "申し込む方を選んでください" };
+  const t = await db.tournament.findUnique({ where: { id: str(fd, "tournamentId") } });
+  if (!t || !t.published) return { error: "この大会には申し込めません" };
+  if ((t.entryDeadline && t.entryDeadline < new Date()) || t.date < new Date()) return { error: "申込みの締切を過ぎています。スタッフにお問い合わせください" };
+  const category = str(fd, "category");
+  if (!t.categories.includes(category)) return { error: "種目を選んでください" };
+  const partner = optStr(fd, "partner");
+  if (/ダブルス|ミックス/.test(category) && !partner) return { error: "ダブルスはペアの方のお名前を入力してください" };
+  const dup = await db.tournamentEntry.findUnique({ where: { tournamentId_memberId_category: { tournamentId: t.id, memberId: who.id, category } } });
+  if (dup && dup.status !== "CANCELED") return { error: "この種目にはすでに申し込んでいます" };
+  if (dup) await db.tournamentEntry.update({ where: { id: dup.id }, data: { status: "ENTERED", partner, note: optStr(fd, "note") } });
+  else await db.tournamentEntry.create({ data: { tournamentId: t.id, memberId: who.id, category, partner, note: optStr(fd, "note") } });
+  await audit(null, "tournament.member_entry", t.id, `${who.lastName} ${who.firstName} ${category}`);
+  revalidatePath("/my/tournaments");
+  return { ok: `${who.firstName}さんの「${t.name}／${category}」の申込みを受け付けました。スクールがまとめて協会に申し込みます` };
+}
+
+export async function cancelTournamentEntry(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const famIds = (await familyOf(me)).map((m) => m.id);
+  const e = await db.tournamentEntry.findFirst({ where: { id: str(fd, "id"), memberId: { in: famIds }, status: "ENTERED" }, include: { tournament: true } });
+  if (!e) return { error: "取り消せる申込みがありません（協会に提出済みの場合はスタッフにご連絡ください）" };
+  if (e.tournament.entryDeadline && e.tournament.entryDeadline < new Date()) return { error: "締切を過ぎたため取り消せません。スタッフにご連絡ください" };
+  await db.tournamentEntry.update({ where: { id: e.id }, data: { status: "CANCELED" } });
+  await audit(null, "tournament.member_cancel", e.id);
+  revalidatePath("/my/tournaments");
+  return { ok: "申込みを取り消しました" };
+}

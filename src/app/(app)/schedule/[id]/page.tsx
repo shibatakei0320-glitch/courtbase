@@ -102,7 +102,7 @@ export default async function SlotPage({ params, searchParams }: { params: Promi
                   {g.rows.length === 0 && g.title && <tr><td colSpan={5} className="text-xs text-slate-400">まだエントリーはありません</td></tr>}
                   {g.rows.map((r) => (
                     <tr key={r.id}>
-                      <td><Link href={`/members/${r.memberId}`} className="text-brand-700 hover:underline">{r.member.lastName} {r.member.firstName}</Link>{r.kind === "REGULAR" && <span className="ml-1"><Badge>在籍</Badge></span>}{r.kind === "MAKEUP" && <span className="ml-1"><Badge tone="yellow">振替</Badge></span>}{!r.member.lineUserId && <span className="ml-1 text-xs text-slate-400">LINE未連携</span>}</td>
+                      <td><Link href={`/members/${r.memberId}`} className="text-brand-700 hover:underline">{r.member.lastName} {r.member.firstName}</Link>{r.kind === "REGULAR" && <span className="ml-1"><Badge>在籍</Badge></span>}{r.member.medicalNote && <span className="ml-1 cursor-help" title={r.member.medicalNote}><Badge tone="yellow">配慮あり</Badge></span>}{r.kind === "MAKEUP" && <span className="ml-1"><Badge tone="yellow">振替</Badge></span>}{!r.member.lineUserId && <span className="ml-1 text-xs text-slate-400">LINE未連携</span>}</td>
                       <td>{cats.length ? <><span className="font-medium">{r.teamName ?? ""}</span>{r.players.length > 0 && <span className={r.teamName ? "ml-2 text-xs text-slate-500" : ""}>{r.players.join(" / ")}</span>}</> : (r.member.plan?.name ?? "-")}</td>
                       <td>{fmtDateTime(r.createdAt)}</td>
                       <td><Badge tone={TONE[r.status]}>{r.kind === "REGULAR" && r.status === "CANCELED" ? "欠席連絡" : RES_STATUS[r.status]}</Badge></td>

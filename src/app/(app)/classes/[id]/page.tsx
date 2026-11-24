@@ -83,7 +83,7 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
                 <tbody>
                   {current.map((e) => (
                     <tr key={e.id}>
-                      <td><Link className="text-brand-700 hover:underline" href={`/members/${e.memberId}`}>{e.member.lastName} {e.member.firstName}</Link>{gradeLabel(e.member.birthDate) && <span className="ml-1 text-xs text-slate-500">{gradeLabel(e.member.birthDate)}</span>}{e.member.status !== "ACTIVE" && <span className="ml-1"><Badge tone="yellow">休会</Badge></span>}</td>
+                      <td><Link className="text-brand-700 hover:underline" href={`/members/${e.memberId}`}>{e.member.lastName} {e.member.firstName}</Link>{gradeLabel(e.member.birthDate) && <span className="ml-1 text-xs text-slate-500">{gradeLabel(e.member.birthDate)}</span>}{e.member.medicalNote && <span className="ml-1 cursor-help" title={e.member.medicalNote}><Badge tone="yellow">配慮あり</Badge></span>}{e.member.status !== "ACTIVE" && <span className="ml-1"><Badge tone="yellow">休会</Badge></span>}</td>
                       <td className="whitespace-nowrap">{fmtDate(e.startDate)}〜{e.endDate ? fmtDate(e.endDate) : ""}{e.startDate > now && <span className="ml-1"><Badge tone="blue">開始前</Badge></span>}</td>
                       <td>
                         <ActionForm action={endEnrollment} className="flex items-center gap-2" confirm="この日を最終回として在籍を終了しますか？以降の出席予定は消えます">

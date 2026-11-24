@@ -94,6 +94,7 @@ export async function SchoolHome({ searchParams }: { searchParams: Promise<{ pai
         <div className="grid grid-cols-2 gap-3">
           <Tile href="/my/school" title="レッスン予定" sub="欠席連絡・月謝" />
           <Tile href="/my/school/makeup" title="振替予約" sub="空いている回を選ぶ" />
+          <Tile href="/my/tournaments" title="大会の申込み" sub="協会などの大会" />
           <Tile href="/my/family" title="家族の登録" sub="お子さまの追加" />
           <Tile href="/my/history" title="履歴・領収書" sub="お申し込みの記録" />
           {facility && <Tile href="/my/court" title="コート予約" sub="時間を選んで予約" />}
