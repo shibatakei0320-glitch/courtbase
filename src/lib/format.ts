@@ -29,4 +29,8 @@ export const MEMBER_STATUS = { ACTIVE: "有効", SUSPENDED: "休会", WITHDRAWN:
 export const PLAN_KIND = { MONTHLY: "月額", DROP_IN: "都度払い" } as const;
 export const SLOT_KIND = { LESSON: "レッスン", RENTAL: "コート貸切", EVENT: "大会・イベント" } as const;
 export const RES_STATUS = { RESERVED: "予約中", ATTENDED: "出席", NO_SHOW: "無断欠席", CANCELED: "キャンセル" } as const;
-export const PAY_METHOD = { CASH: "現金", CARD: "カード", TRANSFER: "振込", OTHER: "その他" } as const;
+export const PAY_METHOD = { CASH: "現金", CARD: "カード", TRANSFER: "振込", DEBIT: "口座振替", OTHER: "その他" } as const;
+
+/** 振替の期限の表示（5年以上先は「期限なし」） */
+export const expiryText = (d: Date, suffix = "まで") =>
+  d.getTime() - Date.now() > 5 * 365 * 86400_000 ? "期限なし" : `${jstDateKey(d).replaceAll("-", "/")}${suffix}`;

@@ -1,4 +1,4 @@
-import { BRAND, BRAND_MARK } from "@/lib/brand";
+import { BRAND, BRAND_MARK, SCHOOL } from "@/lib/brand";
 import Link from "next/link";
 import { requireStaff, ROLE_LABEL, canManage } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -9,20 +9,33 @@ export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireStaff();
-  const setting = await db.setting.findUnique({ where: { id: 1 } });
+  const [setting, open] = await Promise.all([db.setting.findUnique({ where: { id: 1 } }), db.lineContact.count({ where: { needsReply: true } })]);
   const items: NavItem[] = [
     { href: "/dashboard", label: "ダッシュボード" },
+    ...(SCHOOL ? [{ href: "/inbox", label: open > 0 ? `LINE受信箱（${open}）` : "LINE受信箱" }] : []),
     ...(setting?.facilityMode ? [{ href: "/checkin", label: "入退場（QR）" }] : []),
     { href: "/schedule", label: "スケジュール" },
     { href: "/reservations", label: "予約一覧" },
     { href: "/members", label: "会員" },
-    { href: "/payments", label: "売上" },
+    ...(SCHOOL
+      ? [
+          { href: "/attendance", label: "出欠", section: "スクール" },
+          { href: "/classes", label: "クラス", section: "スクール" },
+          { href: "/enrollments", label: "在籍台帳", section: "スクール" },
+          { href: "/makeups", label: "振替", section: "スクール" },
+          { href: "/tournaments", label: "協会・外部の大会", section: "スクール" },
+          { href: "/strings", label: "ガット張替", section: "スクール" },
+          { href: "/tuition", label: "月謝", section: "お金" },
+          { href: "/payments", label: "売上", section: "お金" },
+        ]
+      : [{ href: "/payments", label: "売上" }]),
   ];
   if (canManage(me.role)) {
     if (me.role === "OWNER") items.push({ href: "/settings", label: "施設設定", section: "設定" });
     items.push(
       { href: "/master/courts", label: "コート", section: "設定" },
       { href: "/master/programs", label: "プログラム", section: "設定" },
+      ...(SCHOOL ? [{ href: "/master/levels", label: "レベル", section: "設定" }] : []),
       { href: "/master/plans", label: "会員プラン", section: "設定" },
       { href: "/staff", label: "スタッフ", section: "設定" },
       { href: "/audit-logs", label: "操作ログ", section: "設定" },

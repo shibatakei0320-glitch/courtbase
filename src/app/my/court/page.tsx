@@ -34,8 +34,8 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
   if (!court) {
     return (
       <div className="space-y-6 pt-2">
-        <Link href="/my" className="inline-block px-1 text-xs text-[#13201A]/55 hover:text-[#13201A]">← マイページへ</Link>
-        <p className="border-y border-[#13201A]/10 px-1 py-10 text-sm text-[#13201A]/60">いま会員ページから予約できるコートはありません。</p>
+        <Link href="/my" className="inline-block px-1 text-xs text-[#1A2420]/55 hover:text-[#1A2420]">← マイページへ</Link>
+        <p className="border-y border-[#1A2420]/10 px-1 py-10 text-sm text-[#1A2420]/60">いま会員ページから予約できるコートはありません。</p>
       </div>
     );
   }
@@ -66,9 +66,9 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-8 pt-2">
       <div className="px-1">
-        <Link href="/my" className="inline-block text-xs text-[#13201A]/55 hover:text-[#13201A]">← マイページへ</Link>
+        <Link href="/my" className="inline-block text-xs text-[#1A2420]/55 hover:text-[#1A2420]">← マイページへ</Link>
         <h1 className="mt-4 text-2xl font-medium tracking-wide">コートを予約</h1>
-        <p className="mt-2 text-sm text-[#13201A]/60">日付・コート・開始時刻を選んでください。{court.hourlyPrice > 0 ? `料金は1時間 ${yen(court.hourlyPrice)} です。` : "このコートは無料で使えます。"}</p>
+        <p className="mt-2 text-sm text-[#1A2420]/60">日付・コート・開始時刻を選んでください。{court.hourlyPrice > 0 ? `料金は1時間 ${yen(court.hourlyPrice)} です。` : "このコートは無料で使えます。"}</p>
       </div>
 
       <section>
@@ -79,9 +79,9 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
             const on = d === date;
             return (
               <Link key={d} href={q({ date: d, start: undefined })} aria-current={on ? "date" : undefined}
-                className={`flex w-14 shrink-0 flex-col items-center rounded-xl py-2 ${on ? "bg-[#0F3D2E] text-white" : "bg-white text-[#13201A]"}`}>
+                className={`flex w-14 shrink-0 flex-col items-center rounded-xl py-2 ${on ? "bg-[#0B6B4F] text-white" : "bg-white text-[#1A2420]"}`}>
                 <span className="font-display text-xl font-medium leading-none">{j.m}.{String(j.d).padStart(2, "0")}</span>
-                <span className={`mt-1 text-[11px] ${on ? "text-white/70" : "text-[#13201A]/50"}`}>{j.w}</span>
+                <span className={`mt-1 text-[11px] ${on ? "text-white/70" : "text-[#1A2420]/50"}`}>{j.w}</span>
               </Link>
             );
           })}
@@ -94,7 +94,7 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
           <div className="flex flex-wrap gap-1.5">
             {courts.map((c) => (
               <Link key={c.id} href={q({ court: c.id, start: undefined })} aria-current={c.id === court.id ? "page" : undefined}
-                className={`rounded-full px-4 py-2 text-sm ${c.id === court.id ? "bg-[#0F3D2E] text-white" : "bg-white"}`}>
+                className={`rounded-full px-4 py-2 text-sm ${c.id === court.id ? "bg-[#0B6B4F] text-white" : "bg-white"}`}>
                 {c.name}
               </Link>
             ))}
@@ -108,15 +108,15 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
           {times.map((t) =>
             t.free ? (
               <Link key={t.m} href={q({ start: t.label })}
-                className={`rounded-lg py-2.5 text-center font-display text-lg font-medium leading-none ${t.m === startMin ? "bg-[#0F3D2E] text-[#E4F25C]" : "bg-white text-[#0F3D2E] hover:bg-[#E9EEE6]"}`}>
+                className={`rounded-lg py-2.5 text-center font-display text-lg font-medium leading-none ${t.m === startMin ? "bg-[#0B6B4F] text-[#E3F04B]" : "bg-white text-[#0B6B4F] hover:bg-[#E9EEE6]"}`}>
                 {t.label}
               </Link>
             ) : (
-              <span key={t.m} className="rounded-lg py-2.5 text-center font-display text-lg leading-none text-[#13201A]/20 line-through" aria-label={`${t.label} 予約できません`}>{t.label}</span>
+              <span key={t.m} className="rounded-lg py-2.5 text-center font-display text-lg leading-none text-[#1A2420]/20 line-through" aria-label={`${t.label} 予約できません`}>{t.label}</span>
             ),
           )}
         </div>
-        <p className="mt-2 px-1 text-xs text-[#13201A]/45">線が引かれた時間は、すでに埋まっているか受付が終わっています。</p>
+        <p className="mt-2 px-1 text-xs text-[#1A2420]/45">線が引かれた時間は、すでに埋まっているか受付が終わっています。</p>
       </section>
 
       {startOk && durations.length > 0 && (
@@ -128,18 +128,18 @@ export default async function CourtBooking({ searchParams }: { searchParams: Pro
             <input type="hidden" name="start" value={sp.start} />
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
               {durations.map((d, i) => (
-                <label key={d} className="flex cursor-pointer items-baseline justify-between rounded-xl border border-[#13201A]/15 px-4 py-3 has-[:checked]:border-[#0F3D2E] has-[:checked]:bg-[#0F3D2E] has-[:checked]:text-white">
+                <label key={d} className="flex cursor-pointer items-baseline justify-between rounded-xl border border-[#1A2420]/15 px-4 py-3 has-[:checked]:border-[#0B6B4F] has-[:checked]:bg-[#0B6B4F] has-[:checked]:text-white">
                   <input type="radio" name="minutes" value={d} defaultChecked={i === Math.min(1, durations.length - 1)} className="sr-only" />
                   <span className="text-sm">{d % 60 ? `${d}分` : `${d / 60}時間`}</span>
                   <span className="font-display text-base">{courtPrice(court.hourlyPrice, d) > 0 ? yen(courtPrice(court.hourlyPrice, d)) : "無料"}</span>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-[#13201A]/55">{court.name}　{date.slice(5).replace("-", "/")} {sp.start}〜</p>
-            <Submit className="w-full rounded-xl bg-[#0F3D2E] py-4 text-sm font-bold text-white transition hover:bg-[#0B2F23] active:scale-[0.99] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0F3D2E]">
+            <p className="text-xs text-[#1A2420]/55">{court.name}　{date.slice(5).replace("-", "/")} {sp.start}〜</p>
+            <Submit className="w-full rounded-xl bg-[#0B6B4F] py-4 text-sm font-bold text-white transition hover:bg-[#08553F] active:scale-[0.99] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0B6B4F]">
               {court.hourlyPrice > 0 ? "カードで払って予約する" : "予約する"}
             </Submit>
-            {court.hourlyPrice > 0 && <p className="text-xs leading-relaxed text-[#13201A]/45">決済画面で30分以内にお支払いがない場合、選んだ時間は自動で解放されます。</p>}
+            {court.hourlyPrice > 0 && <p className="text-xs leading-relaxed text-[#1A2420]/45">決済画面で30分以内にお支払いがない場合、選んだ時間は自動で解放されます。</p>}
           </ActionForm>
         </section>
       )}

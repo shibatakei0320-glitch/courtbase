@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { BRAND, SCHOOL } from "../src/lib/brand";
 
 const db = new PrismaClient();
 const jst = (date: string, time: string) => new Date(`${date}T${time}:00+09:00`);
@@ -8,7 +9,7 @@ const dayKey = (offset: number) => new Date(Date.now() + 9 * 3600_000 + offset *
 async function main() {
   const email = process.env.SEED_OWNER_EMAIL ?? "owner@example.com";
   const password = process.env.SEED_OWNER_PASSWORD ?? "ChangeMe123";
-  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: "pickleland" } });
+  await db.setting.upsert({ where: { id: 1 }, update: {}, create: { id: 1, facilityName: BRAND } });
   const owner = await db.staff.upsert({
     where: { email },
     update: {},
@@ -42,6 +43,48 @@ async function main() {
     await db.slot.create({ data: { title: open.name, kind: "EVENT", programId: open.id, courtId: courts[1].id, startsAt: jst(date, "18:00"), endsAt: jst(date, "20:00"), capacity: 16, price: 1500 } });
     if (d % 2 === 0) await db.slot.create({ data: { title: rental.name, kind: "RENTAL", programId: rental.id, courtId: courts[2].id, startsAt: jst(date, "13:00"), endsAt: jst(date, "14:00"), capacity: 4, price: 4000 } });
     for (const m of members.slice(0, 3 + ((d + 1) % 4))) await db.reservation.create({ data: { slotId: s1.id, memberId: m.id, status: d < 0 ? "ATTENDED" : "RESERVED" } });
+  }
+
+  console.log("demo data created");
+  if (!SCHOOL) return;
+  // スクール（NEXT_PUBLIC_SPORT=tennis のとき）：レベル・定期クラス・在籍・4週間分の回
+  const [lv1, lv2] = await Promise.all([
+    db.level.create({ data: { name: "初級", rank: 1, color: "#10b981" } }),
+    db.level.create({ data: { name: "中級", rank: 2, color: "#f59e0b" } }),
+  ]);
+  const [fee1, fee2] = await Promise.all([
+    db.plan.create({ data: { name: "週1回 初級", kind: "MONTHLY", price: 9800, sortOrder: 3 } }),
+    db.plan.create({ data: { name: "週1回 中級", kind: "MONTHLY", price: 11000, sortOrder: 4 } }),
+  ]);
+  const classes = await Promise.all([
+    db.schoolClass.create({ data: { name: "初級 月曜10時", planId: fee1.id, levelId: lv1.id, weekday: 1, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "初級 土曜10時", planId: fee1.id, levelId: lv1.id, weekday: 6, startTime: "10:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+    db.schoolClass.create({ data: { name: "中級 水曜19時", planId: fee2.id, levelId: lv2.id, weekday: 3, startTime: "19:00", durationMin: 90, courtId: courts[2].id, coachId: coach.id, capacity: 6 } }),
+  ]);
+  // ジュニア：保護者（佐藤 健太）の子ども2人と、ジュニアクラス
+  const kids = await Promise.all([
+    db.member.create({ data: { lastName: "佐藤", firstName: "陽向", lastKana: "サトウ", firstKana: "ヒナタ", birthDate: jst("2017-06-10", "00:00"), guardianId: members[0].id } }),
+    db.member.create({ data: { lastName: "佐藤", firstName: "結衣", lastKana: "サトウ", firstKana: "ユイ", birthDate: jst("2014-09-03", "00:00"), guardianId: members[0].id } }),
+  ]);
+  const fee3 = await db.plan.create({ data: { name: "ジュニア 週1回", kind: "MONTHLY", price: 7700, sortOrder: 5 } });
+  const lvJ = await db.level.create({ data: { name: "ジュニア", rank: 1, color: "#3b82f6" } });
+  classes.push(
+    await db.schoolClass.create({ data: { name: "ジュニア 水曜16時", target: "JUNIOR", planId: fee3.id, levelId: lvJ.id, weekday: 3, startTime: "16:00", durationMin: 60, courtId: courts[2].id, coachId: coach.id, capacity: 8 } }),
+    await db.schoolClass.create({ data: { name: "ジュニア 金曜16時", target: "JUNIOR", planId: fee3.id, levelId: lvJ.id, weekday: 5, startTime: "16:00", durationMin: 60, courtId: courts[2].id, coachId: coach.id, capacity: 8 } }),
+  );
+  const today = jst(dayKey(0), "00:00");
+  const roster = [members.slice(0, 4), members.slice(2, 6), members.slice(4, 8), kids, []];
+  for (const [ci, c] of classes.entries()) {
+    for (const m of roster[ci]) await db.enrollment.create({ data: { classId: c.id, memberId: m.id, startDate: today } });
+    for (let d = 1; d <= 28; d++) {
+      const date = dayKey(d);
+      if (new Date(jst(date, "12:00").getTime() + 9 * 3600_000).getUTCDay() !== c.weekday) continue;
+      const startsAt = jst(date, c.startTime);
+      const slot = await db.slot.create({
+        data: { title: c.name, kind: "LESSON", classId: c.id, courtId: c.courtId, instructorId: c.coachId, startsAt, endsAt: new Date(startsAt.getTime() + c.durationMin * 60_000), capacity: c.capacity },
+      });
+      for (const m of roster[ci]) await db.reservation.create({ data: { slotId: slot.id, memberId: m.id, kind: "REGULAR" } });
+    }
   }
   console.log("demo data created");
 }

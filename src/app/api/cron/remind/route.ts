@@ -16,7 +16,7 @@ export async function GET() {
     where: {
       status: "RESERVED",
       remindedAt: null,
-      member: { lineUserId: { not: null } },
+      member: { OR: [{ lineUserId: { not: null } }, { guardian: { lineUserId: { not: null } } }] },
       slot: { status: "OPEN", startsAt: { gte: fromJst(tomorrow), lt: fromJst(addDays(tomorrow, 1)) } },
     },
     select: { id: true },

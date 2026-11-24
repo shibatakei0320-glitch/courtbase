@@ -22,10 +22,10 @@ export default async function Tokushoho() {
   ];
   return (
     <LegalDoc title="特定商取引法に基づく表記">
-      <dl className="divide-y divide-[#13201A]/10">
+      <dl className="divide-y divide-[#1A2420]/10">
         {rows.map(([k, v]) => (
           <div key={k} className="grid gap-1 py-4 first:pt-0 last:pb-0 sm:grid-cols-[10rem_1fr] sm:gap-4">
-            <dt className="text-xs text-[#13201A]/55 sm:text-sm">{k}</dt>
+            <dt className="text-xs text-[#1A2420]/55 sm:text-sm">{k}</dt>
             <dd className="whitespace-pre-wrap">{v}</dd>
           </div>
         ))}

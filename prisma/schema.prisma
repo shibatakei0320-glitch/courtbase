@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")
 }
@@ -43,10 +43,25 @@ enum ReservationStatus {
   CANCELED
 }
 
+/// 予約の種類。REGULAR=クラス在籍による通常出席、MAKEUP=振替
+enum ReservationKind {
+  NORMAL
+  REGULAR
+  MAKEUP
+  FREE // フリーコースの受講（毎月の上限回数まで、自分で予約）
+}
+
+enum CreditStatus {
+  AVAILABLE
+  USED
+  VOID
+}
+
 enum PaymentMethod {
   CASH
   CARD
   TRANSFER
+  DEBIT // 口座振替（自動引き落とし）
   OTHER
 }
 
@@ -65,11 +80,13 @@ model Staff {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  sessions    Session[]
-  resetTokens PasswordResetToken[]
-  slots       Slot[]               @relation("Instructor")
-  payments    Payment[]
-  auditLogs   AuditLog[]
+  sessions     Session[]
+  resetTokens  PasswordResetToken[]
+  slots        Slot[]               @relation("Instructor")
+  classes      SchoolClass[]        @relation("Coach")
+  payments     Payment[]
+  auditLogs    AuditLog[]
+  lineMessages LineMessage[]
 }
 
 model Session {
@@ -95,31 +112,64 @@ model PasswordResetToken {
 }
 
 model Member {
-  id        String       @id @default(cuid())
-  memberNo  Int          @unique @default(autoincrement())
-  lastName  String
-  firstName String
-  lastKana  String?
-  firstKana String?
-  email     String?      @unique
-  phone     String?
-  birthDate DateTime?
-  gender    String?
-  status    MemberStatus @default(ACTIVE)
-  planId    String?
-  plan      Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
-  joinedAt  DateTime     @default(now())
-  note      String?
-  lineUserId String?     @unique
-  externalId String?     @unique // 移行元（hacomono 等）の会員ID
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id         String       @id @default(cuid())
+  memberNo   Int          @unique @default(autoincrement())
+  lastName   String
+  firstName  String
+  lastKana   String?
+  firstKana  String?
+  email      String?      @unique
+  phone      String?
+  birthDate  DateTime?
+  gender     String?
+  status     MemberStatus @default(ACTIVE)
+  planId     String?
+  plan       Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  joinedAt   DateTime     @default(now())
+  note       String?
+  lineUserId String?      @unique
+  externalId String?      @unique // 移行元（hacomono 等）の会員ID
+
+  // 月謝の払い方と、口座振替の口座（預金者名は半角カナ）
+  tuitionMethod    PaymentMethod @default(CASH)
+  bankCode         String? // 金融機関コード4桁（山口銀行 0170）
+  bankName         String? // 金融機関名（半角カナ）
+  branchCode       String? // 支店コード3桁
+  branchName       String? // 支店名（半角カナ）
+  accountType      Int? // 1=普通 2=当座
+  accountNo        String? // 口座番号7桁
+  accountHolder    String? // 預金者名（半角カナ）
+  debitFirstSentAt DateTime? // 初めて振替依頼を出した日（新規コードの判定）
+
+  // 大会・協会
+  associationName String? // 登録団体（例：山口県テニス協会）
+  associationNo   String? // 登録番号
+
+  // 緊急連絡先・健康・保険
+  emergencyName     String?
+  emergencyRelation String?
+  emergencyPhone    String?
+  medicalNote       String? // 持病・アレルギーなど配慮すること
+  insuranceYear     Int? // スポーツ安全保険の加入年度
+  schoolName        String? // 学校名（ジュニア）
+
+  stringJobs        StringJob[]
+  tournamentEntries TournamentEntry[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   reservations Reservation[]
   payments     Payment[]
   sessions     MemberSession[]
   visits       Visit[]
   waitlists    Waitlist[]
+  enrollments  Enrollment[]
+  credits      MakeupCredit[]
+  leaves       Leave[]
+  invoices     Invoice[]
+  guardianId   String? // 保護者（ジュニア会員の場合。保護者のLINE・会員ページで手続きする）
+  guardian     Member?         @relation("Family", fields: [guardianId], references: [id], onDelete: SetNull)
+  children     Member[]        @relation("Family")
 }
 
 model MemberSession {
@@ -142,21 +192,33 @@ model Plan {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 
-  members  Member[]
-  payments Payment[]
+  // スクールの受講プラン（例：ジュニア アカデミー スタンダード 月8回）
+  course          String? // ENJOY | ACADEMY
+  target          ClassTarget?
+  levelId         String? // アカデミーの段階（スタンダード等）
+  level           Level?       @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  lessonsPerMonth Int? // 月4回 / 月8回（＝週1クラス / 週2クラス）
+  freeMax         Int? // フリーコース：月の上限回数（在籍クラスを決めず、空きのある回を予約）
+  extraDiscount   Int          @default(0) // 2クラス目以降の割引（例：ジュニアエンジョイ 週2回以上で1クラスにつき2,200円引き）
+
+  members     Member[]
+  payments    Payment[]
+  classes     SchoolClass[]
+  enrollments Enrollment[]
 }
 
 model Court {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  hourlyPrice    Int     @default(0)
-  memberBookable Boolean @default(true)
-  active      Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  hourlyPrice    Int      @default(0)
+  memberBookable Boolean  @default(true)
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
 
-  slots Slot[]
+  slots   Slot[]
+  classes SchoolClass[]
 }
 
 model Program {
@@ -175,71 +237,75 @@ model Program {
 }
 
 model Slot {
-  id           String     @id @default(cuid())
-  title        String
-  kind         SlotKind   @default(LESSON)
-  programId    String?
-  program      Program?   @relation(fields: [programId], references: [id], onDelete: SetNull)
-  courtId      String
-  court        Court      @relation(fields: [courtId], references: [id], onDelete: Restrict)
-  instructorId String?
-  instructor   Staff?     @relation("Instructor", fields: [instructorId], references: [id], onDelete: SetNull)
-  startsAt     DateTime
-  endsAt       DateTime
-  capacity     Int
-  price        Int        @default(0)
-  status       SlotStatus @default(OPEN)
-  note         String?
-  memberBooked Boolean    @default(false) // 会員が時間を選んで予約したコート利用
-  heldById     String? // 決済中の仮押さえ（会員ID）
-  heldUntil    DateTime?
-  publicEntries Boolean   @default(false) // 大会のエントリー一覧を会員ページに公開
-  categories   EventCategory[]
-  messages     EventMessage[]
-  createdAt    DateTime   @default(now())
+  id            String          @id @default(cuid())
+  title         String
+  kind          SlotKind        @default(LESSON)
+  programId     String?
+  program       Program?        @relation(fields: [programId], references: [id], onDelete: SetNull)
+  courtId       String
+  court         Court           @relation(fields: [courtId], references: [id], onDelete: Restrict)
+  instructorId  String?
+  instructor    Staff?          @relation("Instructor", fields: [instructorId], references: [id], onDelete: SetNull)
+  startsAt      DateTime
+  endsAt        DateTime
+  capacity      Int
+  price         Int             @default(0)
+  status        SlotStatus      @default(OPEN)
+  note          String?
+  memberBooked  Boolean         @default(false) // 会員が時間を選んで予約したコート利用
+  heldById      String? // 決済中の仮押さえ（会員ID）
+  heldUntil     DateTime?
+  publicEntries Boolean         @default(false) // 大会のエントリー一覧を会員ページに公開
+  categories    EventCategory[]
+  messages      EventMessage[]
+  classId       String? // スクールの定期クラスの回
+  schoolClass   SchoolClass?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
 
   reservations Reservation[]
 
+  @@unique([classId, startsAt])
   @@index([startsAt])
   @@index([courtId, startsAt])
 }
 
 model Reservation {
-  id          String            @id @default(cuid())
-  slotId      String
-  slot        Slot              @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  memberId    String
-  member      Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  status      ReservationStatus @default(RESERVED)
-  canceledAt  DateTime?
-  remindedAt  DateTime?
-  categoryId  String?
-  category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  teamName    String?
-  players     String[]       @default([])
-  createdAt   DateTime          @default(now())
+  id         String            @id @default(cuid())
+  slotId     String
+  slot       Slot              @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status     ReservationStatus @default(RESERVED)
+  kind       ReservationKind   @default(NORMAL)
+  canceledAt DateTime?
+  remindedAt DateTime?
+  categoryId String?
+  category   EventCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  teamName   String?
+  players    String[]          @default([])
+  createdAt  DateTime          @default(now())
 
   @@index([slotId])
   @@index([memberId])
 }
 
 model Payment {
-  id          String        @id @default(cuid())
-  memberId    String?
-  member      Member?       @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  planId      String?
-  plan        Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
-  amount      Int
-  method      PaymentMethod @default(CASH)
-  description String
-  paidAt      DateTime      @default(now())
-  staffId     String?
-  staff       Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
-  stripeSessionId       String? @unique
+  id                    String        @id @default(cuid())
+  memberId              String?
+  member                Member?       @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  planId                String?
+  plan                  Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  amount                Int
+  method                PaymentMethod @default(CASH)
+  description           String
+  paidAt                DateTime      @default(now())
+  staffId               String?
+  staff                 Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  stripeSessionId       String?       @unique
   stripePaymentIntentId String?
-  reservationId         String? @unique
+  reservationId         String?       @unique
   refundedAt            DateTime?
-  createdAt   DateTime      @default(now())
+  createdAt             DateTime      @default(now())
 
   @@index([paidAt])
 }
@@ -258,24 +324,46 @@ model AuditLog {
 }
 
 model Setting {
-  id                  Int     @id @default(1)
-  facilityName        String  @default("CourtBase")
-  openHour            Int     @default(7)
-  closeHour           Int     @default(23)
-  cancelDeadlineHours Int     @default(24)
-  sessionHours        Int     @default(12)
-  contactEmail        String?
-  facilityMode        Boolean @default(false) // 施設の予約・入退場（QR）を使う
+  id                   Int     @id @default(1)
+  facilityName         String  @default("CourtBase")
+  openHour             Int     @default(7)
+  closeHour            Int     @default(23)
+  cancelDeadlineHours  Int     @default(24)
+  sessionHours         Int     @default(12)
+  contactEmail         String?
+  // スクール（定期クラス・欠席・振替）
+  absenceDeadlineHours Int     @default(0) // 欠席連絡の期限（開始の何時間前まで。0=開始まで）
+  makeupValidDays      Int     @default(60) // 振替の有効期限（欠席したレッスン日から何日）
+  makeupLevelRule      String  @default("SAME_OR_LOWER") // SAME | ONE_BELOW | SAME_OR_LOWER | ANY
+  makeupCrossCourse    Boolean @default(true) // 一般（成人）はエンジョイ・アカデミーのコースをまたいで振替できる
+  coolMonths           Int     @default(3) // クール制（3か月で1クール、退会はクールの終わり）。0ならクール制なし
+  lessonsPerCool       Int     @default(12) // 1クールのレッスン回数
+  // 月謝
+  admissionFee         Int     @default(0) // 入会金（初めての月謝に加算）
+  leaveFee             Int     @default(0) // 休会費（休会中の月）
+  prorateMidMonth      Boolean @default(true) // 月の途中の入会・退会は回数で按分
+  // 口座振替（全銀協フォーマットの依頼データ）
+  debitConsignorCode   String? // 委託者コード（10桁、銀行から通知）
+  debitConsignorName   String? // 委託者名（半角カナ）
+  debitBankCode        String  @default("0170") // 取引銀行（山口銀行）
+  debitBankName        String  @default("ﾔﾏｸﾞﾁ")
+  debitBranchCode      String? // 取引支店コード
+  debitBranchName      String? // 取引支店名（半角カナ）
+  debitAccountType     Int     @default(1)
+  debitAccountNo       String? // 委託者の口座番号
+  debitDay             Int     @default(27) // 引落日（毎月）
+  stringNotify         Boolean @default(true) // ガットの仕上がりをLINEで連絡
+  facilityMode         Boolean @default(false) // 施設の予約・入退場（QR）を使う
   // 特定商取引法に基づく表記
-  legalSeller         String?
-  legalManager        String?
-  legalAddress        String?
-  legalPhone          String?
-  legalEmail          String?
-  legalNotes          String?
+  legalSeller          String?
+  legalManager         String?
+  legalAddress         String?
+  legalPhone           String?
+  legalEmail           String?
+  legalNotes           String?
   // 利用規約・プライバシーポリシー（空なら既定の文面）
-  termsText           String?
-  privacyText         String?
+  termsText            String?
+  privacyText          String?
 }
 
 model Visit {
@@ -298,20 +386,20 @@ enum EntryFormat {
 
 /// 大会の種目（形式×レベル）。定員は組数、参加費は1エントリーあたり
 model EventCategory {
-  id        String      @id @default(cuid())
-  slotId    String
-  slot      Slot        @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  name      String
-  format    EntryFormat @default(DOUBLES)
-  level     String?
-  teamSize  Int         @default(4)
-  capacity  Int         @default(16)
-  price     Int         @default(0)
-  earlyPrice Int?       // 早期割引の参加費
-  earlyUntil DateTime?  // 早期割引の締切（この時刻まで）
-  drawPublished Boolean @default(false) // 対戦表を会員ページに公開
-  sortOrder Int         @default(0)
-  createdAt DateTime    @default(now())
+  id            String      @id @default(cuid())
+  slotId        String
+  slot          Slot        @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  name          String
+  format        EntryFormat @default(DOUBLES)
+  level         String?
+  teamSize      Int         @default(4)
+  capacity      Int         @default(16)
+  price         Int         @default(0)
+  earlyPrice    Int? // 早期割引の参加費
+  earlyUntil    DateTime? // 早期割引の締切（この時刻まで）
+  drawPublished Boolean     @default(false) // 対戦表を会員ページに公開
+  sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
 
   reservations Reservation[]
   waitlist     Waitlist[]
@@ -350,21 +438,254 @@ model Waitlist {
 
 /// 対戦表の1試合。entryA/B と winner は Reservation.id
 model Match {
-  id         String        @id @default(cuid())
-  categoryId String
-  category   EventCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  stage      String        // LEAGUE | KNOCKOUT
-  groupName  String?
-  round      Int
-  position   Int
-  entryAId   String?
-  entryBId   String?
-  score      String?
-  winnerId   String?
-  court      String?
+  id          String        @id @default(cuid())
+  categoryId  String
+  category    EventCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  stage       String // LEAGUE | KNOCKOUT
+  groupName   String?
+  round       Int
+  position    Int
+  entryAId    String?
+  entryBId    String?
+  score       String?
+  winnerId    String?
+  court       String?
   nextMatchId String?
-  nextSlot   Int?          // 0 = A, 1 = B
-  createdAt  DateTime      @default(now())
+  nextSlot    Int? // 0 = A, 1 = B
+  createdAt   DateTime      @default(now())
 
   @@index([categoryId, stage, round, position])
+}
+
+/// スクールのレベル（rank が大きいほど上級）
+model Level {
+  id        String   @id @default(cuid())
+  name      String
+  rank      Int      @default(1)
+  color     String   @default("#2563eb")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  classes SchoolClass[]
+  plans   Plan[]
+}
+
+/// 毎週決まった曜日・時間に行う定期クラス。回（Slot）は月ごとなどにまとめて生成する
+enum ClassTarget {
+  ADULT
+  JUNIOR
+}
+
+model SchoolClass {
+  id          String      @id @default(cuid())
+  name        String
+  target      ClassTarget @default(ADULT) // 一般 / ジュニア（振替は同じ区分のクラスのみ）
+  course      String      @default("ENJOY") // ENJOY（エンジョイ）| ACADEMY（アカデミー）
+  levelId     String?
+  level       Level?      @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  weekday     Int // 0=日 … 6=土（JST）
+  startTime   String // "HH:mm"
+  durationMin Int         @default(90)
+  courtId     String
+  court       Court       @relation(fields: [courtId], references: [id], onDelete: Restrict)
+  coachId     String?
+  coach       Staff?      @relation("Coach", fields: [coachId], references: [id], onDelete: SetNull)
+  planId      String? // 月謝（月額プラン）
+  plan        Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
+  capacity    Int         @default(8)
+  description String?
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  enrollments Enrollment[]
+  slots       Slot[]
+}
+
+/// クラスへの在籍。startDate〜endDate（含む、JSTの日付の0時）の回に自動で出席予定が入る
+model Enrollment {
+  id          String       @id @default(cuid())
+  classId     String? // フリーコースはクラスなし（プランの段階・区分で予約できる回が決まる）
+  schoolClass SchoolClass? @relation(fields: [classId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime?
+  planId      String? // 受講プラン（月謝の計算に使う。なければクラスの月謝）
+  plan        Plan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+
+  @@index([classId])
+  @@index([memberId])
+}
+
+/// 振替の権利。欠席連絡・休講で発行し、振替予約で使う
+model MakeupCredit {
+  id                  String       @id @default(cuid())
+  memberId            String
+  member              Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status              CreditStatus @default(AVAILABLE)
+  reason              String // 欠席連絡 / 休講 / 手動発行 など
+  sourceReservationId String?      @unique // 欠席したレッスンの予約
+  levelRank           Int? // 欠席したクラスのレベル（振替先の制限に使う）
+  target              ClassTarget? // 欠席したクラスの区分（一般 / ジュニア）
+  course              String? // 欠席したクラスのコース（ENJOY / ACADEMY）
+  expiresAt           DateTime
+  usedReservationId   String?      @unique // 振替で取った予約
+  note                String?
+  staffId             String?
+  createdAt           DateTime     @default(now())
+
+  @@index([memberId, status])
+}
+
+enum LineDirection {
+  IN
+  OUT
+}
+
+/// LINE公式アカウントの相手（友だち）。会員とは lineUserId で対応づける
+model LineContact {
+  id            String    @id @default(cuid())
+  lineUserId    String    @unique
+  displayName   String?
+  pictureUrl    String?
+  followed      Boolean   @default(true)
+  needsReply    Boolean   @default(false) // 要対応
+  unread        Int       @default(0)
+  lastMessageAt DateTime?
+  lastText      String?
+  createdAt     DateTime  @default(now())
+
+  messages LineMessage[]
+
+  @@index([lastMessageAt])
+}
+
+/// LINEのやりとり（受信・自動応答・通知・スタッフの返信）
+model LineMessage {
+  id            String        @id @default(cuid())
+  contactId     String
+  contact       LineContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  direction     LineDirection
+  type          String // text | image | sticker | file | postback | follow | unfollow | other
+  text          String
+  auto          Boolean       @default(false) // 自動応答・システム通知
+  lineMessageId String?       @unique
+  staffId       String?
+  staff         Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  createdAt     DateTime      @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+/// 休会（月単位。期間中は在籍クラスの出席予定が入らず、月謝の代わりに休会費）
+model Leave {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  fromMonth String // "YYYY-MM"
+  toMonth   String // "YYYY-MM"（含む）
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  VOID
+}
+
+/// 月謝の請求（会員×月）。lines は [{ label, amount }]
+model Invoice {
+  id          String        @id @default(cuid())
+  memberId    String
+  member      Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  month       String // "YYYY-MM"
+  amount      Int
+  lines       Json
+  status      InvoiceStatus @default(UNPAID)
+  paidAt      DateTime?
+  paymentId   String?       @unique
+  note        String?
+  debitSentAt DateTime? // 口座振替の依頼データに入れた日時
+  debitResult String? // 振替結果コード（0=振替済 1=資金不足 2=取引なし 3=預金者都合 4=依頼書なし 8=委託者都合 9=その他）
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([memberId, month])
+  @@index([month, status])
+}
+
+enum StringStatus {
+  RECEIVED // 受付
+  DONE // 仕上がり
+  DELIVERED // 受け渡し済み
+  CANCELED
+}
+
+/// ガット張替（ストリンギング）
+model StringJob {
+  id          String       @id @default(cuid())
+  memberId    String?
+  member      Member?      @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  customer    String? // 会員以外のお客さまの名前
+  racket      String // メーカー・モデル
+  stringName  String // ガットの種類
+  tension     String // 例：48 / 46（ポンド）
+  note        String?
+  price       Int          @default(0)
+  status      StringStatus @default(RECEIVED)
+  receivedAt  DateTime     @default(now())
+  dueAt       DateTime? // 仕上がり予定
+  doneAt      DateTime?
+  deliveredAt DateTime?
+  paymentId   String?      @unique
+  staffId     String?
+  createdAt   DateTime     @default(now())
+
+  @@index([status, receivedAt])
+  @@index([memberId])
+}
+
+/// 協会などが主催する大会（スクール外）。会員の申込みをまとめて協会に提出する
+model Tournament {
+  id            String    @id @default(cuid())
+  name          String
+  organizer     String // 主催（例：山口県テニス協会）
+  date          DateTime // 開催日
+  venue         String?
+  entryDeadline DateTime? // スクール内の申込締切
+  fee           Int       @default(0) // 参加費（1エントリー）
+  categories    String[]  @default([]) // 種目（例：一般男子ダブルス）
+  description   String?
+  published     Boolean   @default(true) // 会員ページに表示
+  createdAt     DateTime  @default(now())
+
+  entries TournamentEntry[]
+
+  @@index([date])
+}
+
+enum EntryStatus {
+  ENTERED // 申込み
+  SUBMITTED // 協会に提出済み
+  CANCELED
+}
+
+model TournamentEntry {
+  id           String      @id @default(cuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  category     String
+  partner      String? // ペアの名前（ダブルス）
+  note         String?
+  status       EntryStatus @default(ENTERED)
+  paymentId    String?     @unique // 参加費の入金
+  createdAt    DateTime    @default(now())
+
+  @@unique([tournamentId, memberId, category])
 }

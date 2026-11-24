@@ -1,17 +1,18 @@
-import { BRAND } from "@/lib/brand";
+import { BRAND, SCHOOL } from "@/lib/brand";
 import { ActionForm, Submit } from "@/components/ActionForm";
 import { PageHeader } from "@/components/ui";
 import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { saveSettings } from "./actions";
 import { defaultPrivacy, defaultTerms } from "@/lib/legal";
+import { LEVEL_RULE } from "@/lib/school";
 
 export const metadata = { title: "施設設定" };
 
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: BRAND, openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: BRAND, openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", makeupCrossCourse: true, coolMonths: 3, lessonsPerCool: 12, admissionFee: 0, leaveFee: 0, prorateMidMonth: true, debitConsignorCode: null, debitConsignorName: null, debitBankCode: "0170", debitBankName: "ﾔﾏｸﾞﾁ", debitBranchCode: null, debitBranchName: null, debitAccountType: 1, debitAccountNo: null, debitDay: 27, stringNotify: true, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />
@@ -30,6 +31,46 @@ export default async function SettingsPage() {
           <label className="block"><span className="label">会員のキャンセル期限（開始の何時間前まで）</span><input className="input" type="number" name="cancelDeadlineHours" min={0} max={720} defaultValue={s.cancelDeadlineHours} /><span className="mt-1 block text-xs text-slate-500">期限内なら会員がマイページからキャンセルでき、カード払いは全額返金されます</span></label>
           <label className="block"><span className="label">ログイン有効時間（時間）</span><input className="input" type="number" name="sessionHours" min={1} max={720} defaultValue={s.sessionHours} /></label>
           <label className="block sm:col-span-2"><span className="label">問い合わせ先メール</span><input className="input" type="email" name="contactEmail" defaultValue={s.contactEmail ?? ""} /></label>
+          {SCHOOL && (
+            <>
+          <div className="mt-4 border-t pt-6 sm:col-span-2">
+            <h2 className="font-semibold">スクール（欠席・振替）</h2>
+            <p className="mt-1 text-xs text-slate-500">クラス在籍者が会員ページから欠席連絡すると、振替の権利が1回分付きます。権利を使って、空きのある別の回を予約できます。</p>
+          </div>
+          <label className="block"><span className="label">欠席連絡の期限（開始の何時間前まで）</span><input className="input" type="number" name="absenceDeadlineHours" min={0} max={168} defaultValue={s.absenceDeadlineHours} /><span className="mt-1 block text-xs text-slate-500">0 なら開始時刻まで。期限後の欠席は振替なし（スタッフは期限後も受付可）</span></label>
+          <label className="block"><span className="label">振替の有効期限（欠席した日から何日）</span><input className="input" type="number" name="makeupValidDays" min={0} max={365} defaultValue={s.makeupValidDays} /><span className="mt-1 block text-xs text-slate-500">0 なら期限なし（在籍中は有効、退会で失効）</span></label>
+          <label className="block sm:col-span-2"><span className="label">振替できるレベル</span>
+            <select className="input" name="makeupLevelRule" defaultValue={s.makeupLevelRule}>
+              {Object.entries(LEVEL_RULE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="makeupCrossCourse" defaultChecked={s.makeupCrossCourse} />成人は、エンジョイ・アカデミーのコースをまたいで振替できる（ジュニアは同じコースのみ）</label>
+          <label className="block"><span className="label">クール制（何か月で1クール）</span>
+            <select className="input" name="coolMonths" defaultValue={String(s.coolMonths)}><option value="3">3か月（4–6月・7–9月・10–12月・1–3月）</option><option value="6">6か月</option><option value="1">1か月</option><option value="0">クール制なし</option></select>
+            <span className="mt-1 block text-xs text-slate-500">退会はクールの終わり。回の作成もクール単位で行えます</span>
+          </label>
+          <label className="block"><span className="label">1クールのレッスン回数</span><input className="input" type="number" name="lessonsPerCool" min={1} max={52} defaultValue={s.lessonsPerCool} /></label>
+          <div className="mt-4 border-t pt-6 sm:col-span-2">
+            <h2 className="font-semibold">月謝</h2>
+            <p className="mt-1 text-xs text-slate-500">クラスごとの月謝は、クラスの設定で月額プランを選びます。</p>
+          </div>
+          <label className="block"><span className="label">入会金（円）</span><input className="input" type="number" min={0} name="admissionFee" defaultValue={s.admissionFee} /><span className="mt-1 block text-xs text-slate-500">初めての月謝に加算。0なら請求しません</span></label>
+          <label className="block"><span className="label">休会費（円／月）</span><input className="input" type="number" min={0} name="leaveFee" defaultValue={s.leaveFee} /></label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="prorateMidMonth" defaultChecked={s.prorateMidMonth} />月の途中の入会・退会・クラス変更は、その月のレッスン回数で按分する（オフなら満額）</label>
+          <div className="mt-4 border-t pt-6 sm:col-span-2">
+            <h2 className="font-semibold">口座振替（月謝の引き落とし）</h2>
+            <p className="mt-1 text-xs text-slate-500">銀行と口座振替の契約をしたときに通知される情報です。名前はカナで入力してください（半角カナに変換して保存します）。</p>
+          </div>
+          <label className="block"><span className="label">委託者コード（10桁）</span><input className="input" name="debitConsignorCode" inputMode="numeric" defaultValue={s.debitConsignorCode ?? ""} /></label>
+          <label className="block"><span className="label">委託者名（カナ）</span><input className="input" name="debitConsignorName" defaultValue={s.debitConsignorName ?? ""} placeholder="ﾌｵ-ﾃｲｴｲﾄｹ- ﾃﾆｽｽｸ-ﾙ" /></label>
+          <label className="block"><span className="label">取引銀行コード・名（カナ）</span><span className="flex gap-2"><input className="input w-24" name="debitBankCode" defaultValue={s.debitBankCode} /><input className="input" name="debitBankName" defaultValue={s.debitBankName} /></span></label>
+          <label className="block"><span className="label">取引支店コード・名（カナ）</span><span className="flex gap-2"><input className="input w-24" name="debitBranchCode" defaultValue={s.debitBranchCode ?? ""} /><input className="input" name="debitBranchName" defaultValue={s.debitBranchName ?? ""} /></span></label>
+          <label className="block"><span className="label">入金口座</span><span className="flex gap-2"><select className="input w-28" name="debitAccountType" defaultValue={String(s.debitAccountType)}><option value="1">普通</option><option value="2">当座</option></select><input className="input" name="debitAccountNo" inputMode="numeric" defaultValue={s.debitAccountNo ?? ""} placeholder="口座番号" /></span></label>
+          <label className="block"><span className="label">引落日（毎月）</span><input className="input" type="number" name="debitDay" min={1} max={31} defaultValue={s.debitDay} /><span className="mt-1 block text-xs text-slate-500">土日祝の場合の扱いは銀行の規則に従います</span></label>
+          <div className="mt-4 border-t pt-6 sm:col-span-2"><h2 className="font-semibold">ガット張替</h2></div>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="stringNotify" defaultChecked={s.stringNotify} />仕上がったらお客さまにLINEで知らせる</label>
+            </>
+          )}
           <div className="mt-4 border-t pt-6 sm:col-span-2">
             <h2 className="font-semibold">特定商取引法に基づく表記</h2>
             <p className="mt-1 text-xs text-slate-500">カード決済の本番利用に必要です。空欄の項目は「請求があった場合には遅滞なく開示いたします」と表示されます（個人事業の場合に認められている書き方です）。<a className="text-brand-700 underline" href="/my/legal/tokushoho" target="_blank">表示を確認</a></p>

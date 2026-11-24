@@ -12,7 +12,7 @@ export async function createPayment(_: ActionState, fd: FormData): Promise<Actio
   const amount = int(fd, "amount");
   if (amount === 0) return { error: "金額を入力してください（返金はマイナス）" };
   const method = str(fd, "method") as PaymentMethod;
-  if (!["CASH", "CARD", "TRANSFER", "OTHER"].includes(method)) return { error: "支払方法が不正です" };
+  if (!["CASH", "CARD", "TRANSFER", "DEBIT", "OTHER"].includes(method)) return { error: "支払方法が不正です" };
   const memberId = optStr(fd, "memberId");
   const planId = optStr(fd, "planId");
   const plan = planId ? await db.plan.findUnique({ where: { id: planId } }) : null;

@@ -1,9 +1,10 @@
 import { BRAND } from "@/lib/brand";
 import "server-only";
 import { db } from "./db";
+import { lineTo } from "./family";
 import { pushLine } from "./line-message";
 import { appUrl } from "./url";
-import { fmtTime, jstDateKey, yen } from "./format";
+import { expiryText, fmtTime, jstDateKey, yen } from "./format";
 import { categoryLabel, entryName } from "./entry";
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
@@ -15,7 +16,7 @@ function when(start: Date, end: Date) {
 
 async function load(reservationId: string) {
   const [r, s] = await Promise.all([
-    db.reservation.findUnique({ where: { id: reservationId }, include: { member: true, category: true, slot: { include: { court: true } } } }),
+    db.reservation.findUnique({ where: { id: reservationId }, include: { member: { include: { guardian: true } }, category: true, slot: { include: { court: true } } } }),
     db.setting.findUnique({ where: { id: 1 } }),
   ]);
   return r ? { r, name: s?.facilityName ?? BRAND } : null;
@@ -23,14 +24,23 @@ async function load(reservationId: string) {
 
 function body(r: NonNullable<Awaited<ReturnType<typeof load>>>["r"]) {
   const entry = r.category ? `\n種目：${categoryLabel(r.category)}${r.players.length > 1 || r.teamName ? `\nエントリー：${entryName(r)}` : ""}` : "";
-  return `${when(r.slot.startsAt, r.slot.endsAt)}\n${r.slot.title}\n${r.slot.court.name}${entry}`;
+  const who = r.member.guardianId ? `受講者：${r.member.lastName} ${r.member.firstName}さん\n` : "";
+  return `${who}${when(r.slot.startsAt, r.slot.endsAt)}\n${r.slot.title}\n${r.slot.court.name}${entry}`;
 }
 
 export async function notifyBooked(reservationId: string, amount = 0) {
   const x = await load(reservationId);
   if (!x) return;
+  if (x.r.kind === "FREE") {
+    await pushLine(lineTo(x.r.member), `【${x.name}】フリーコースの予約が確定しました\n\n${body(x.r)}\n\n予定の確認・取り消しはこちら\n${appUrl()}/my/school`);
+    return;
+  }
+  if (x.r.kind === "MAKEUP") {
+    await pushLine(lineTo(x.r.member), `【${x.name}】振替の予約が確定しました\n\n${body(x.r)}\n\n取り消すと振替は戻ります。\n${appUrl()}/my/school`);
+    return;
+  }
   await pushLine(
-    x.r.member.lineUserId,
+    lineTo(x.r.member),
     `【${x.name}】予約が確定しました\n\n${body(x.r)}${amount > 0 ? `\n料金 ${yen(amount)}（お支払い済み）` : ""}\n\n入退場の際は会員証のQRコードを受付でお見せください。\n${appUrl()}/my/card`,
   );
 }
@@ -40,14 +50,14 @@ export async function notifyCanceled(reservationId: string, refunded: number, by
   if (!x) return;
   const head = byFacility ? "施設の都合により、次の予約を中止しました。申し訳ありません。" : "次の予約をキャンセルしました。";
   const refund = refunded > 0 ? `\n\n${yen(refunded)}を返金しました。カード会社によって、明細への反映まで数日〜2週間ほどかかります。` : "";
-  await pushLine(x.r.member.lineUserId, `【${x.name}】${head}\n\n${body(x.r)}${refund}`);
+  await pushLine(lineTo(x.r.member), `【${x.name}】${head}\n\n${body(x.r)}${refund}`);
 }
 
 export async function notifyReminder(reservationId: string) {
   const x = await load(reservationId);
   if (!x) return false;
   return pushLine(
-    x.r.member.lineUserId,
+    lineTo(x.r.member),
     `【${x.name}】明日のご予約のお知らせです\n\n${body(x.r)}\n\n会員証（入退場用QRコード）\n${appUrl()}/my/card`,
   );
 }
@@ -73,4 +83,51 @@ export async function notifyWaitlist(categoryId: string) {
   }
   await db.waitlist.updateMany({ where: { categoryId }, data: { notifiedAt: new Date() } });
   return sent;
+}
+
+// ---- スクール ----
+
+/** 欠席連絡の受付（Web・スタッフ受付のとき。LINEからの欠席はその場で応答する） */
+export async function notifyAbsence(reservationId: string, creditExpires: Date | null) {
+  const x = await load(reservationId);
+  if (!x) return;
+  const credit = creditExpires ? `\n\n振替が1回分付きました（${expiryText(creditExpires)}）。「振替予約」から空きのある回を選べます。` : "";
+  await pushLine(lineTo(x.r.member), `【${x.name}】欠席を受け付けました\n\n${body(x.r)}${credit}`);
+}
+
+export async function notifyMakeupCanceled(reservationId: string) {
+  const x = await load(reservationId);
+  if (!x) return;
+  await pushLine(lineTo(x.r.member), `【${x.name}】振替の予約を取り消しました\n\n${body(x.r)}\n\n振替は戻っています。別の回を選べます。`);
+}
+
+/** 休講のお知らせ（在籍者・振替予定者） */
+export async function notifyLessonCanceled(reservationId: string) {
+  const x = await load(reservationId);
+  if (!x) return;
+  await pushLine(lineTo(x.r.member), `【${x.name}】次のレッスンは休講になりました。申し訳ありません。\n\n${body(x.r)}\n\n振替が1回分付いています。「振替予約」から空きのある回を選べます。\n${appUrl()}/my/school`);
+}
+
+/** 口座振替ができなかったことのお知らせ */
+export async function notifyDebitFailed(invoiceId: string, reason: string) {
+  const inv = await db.invoice.findUnique({ where: { id: invoiceId }, include: { member: { include: { guardian: true } } } });
+  if (!inv) return false;
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  const who = inv.member.guardianId ? `（${inv.member.lastName} ${inv.member.firstName}さん分）` : "";
+  return pushLine(
+    lineTo(inv.member),
+    `【${s?.facilityName ?? BRAND}】${Number(inv.month.slice(5))}月分の月謝${who}${yen(inv.amount)}を、口座から引き落とせませんでした（${reason}）。\n\nお手数ですが、次回のレッスンの際に受付で現金でお支払いいただくか、スクールにご連絡ください。`,
+  );
+}
+
+/** ガットの仕上がりのお知らせ */
+export async function notifyStringDone(jobId: string) {
+  const j = await db.stringJob.findUnique({ where: { id: jobId }, include: { member: { include: { guardian: true } } } });
+  if (!j?.member) return false;
+  const s = await db.setting.findUnique({ where: { id: 1 } });
+  if (s && !s.stringNotify) return false;
+  return pushLine(
+    lineTo(j.member),
+    `【${s?.facilityName ?? BRAND}】ガットの張り替えが仕上がりました。\n\nラケット：${j.racket}\nガット：${j.stringName}（${j.tension}）${j.price > 0 ? `\n料金：${yen(j.price)}` : ""}\n\n受付でお渡しします。次回のレッスンの際などにお受け取りください。`,
+  );
 }
