@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import { ActionForm, Submit } from "@/components/ActionForm";
-import { fmtDate } from "@/lib/format";
+import { expiryText } from "@/lib/format";
 import { familyMember, familyOf } from "@/lib/family";
 import { availableCredits, gradeLabel, makeupCandidates } from "@/lib/school";
 import { bookMyMakeup } from "../../actions";
@@ -37,12 +37,12 @@ export default async function MakeupPage({ searchParams }: { searchParams: Promi
         <>
           <div className={ui.card}>
             <p className="text-base">使える振替 <b className="text-xl">{credits.length}回</b></p>
-            <p className="mt-1 text-sm text-[#5B6661]">{fmtDate(credit.expiresAt)}までの、空きのある回から選べます。</p>
+            <p className="mt-1 text-sm text-[#5B6661]">{expiryText(credit.expiresAt) === "期限なし" ? "空きのある回から選べます（期限なし）。" : `${expiryText(credit.expiresAt)}の、空きのある回から選べます。`}</p>
             {credits.length > 1 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {credits.map((c) => (
                   <Link key={c.id} href={`/my/school/makeup?m=${who.id}&credit=${c.id}`} className={`rounded-full border-2 px-3 py-1 text-sm ${c.id === credit.id ? "border-[#0B6B4F] bg-[#0B6B4F] text-white" : "border-[#1A2420]/15"}`}>
-                    {fmtDate(c.expiresAt).slice(5)}まで
+                    {expiryText(c.expiresAt)}
                   </Link>
                 ))}
               </div>

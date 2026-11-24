@@ -4,9 +4,10 @@ import { ActionForm, Submit } from "@/components/ActionForm";
 import { Badge, Empty, PageHeader } from "@/components/ui";
 import { canManage, requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { fmtDate, fmtWeekday, fmtTime, jstDateKey } from "@/lib/format";
-import { WEEKDAYS, enrollmentCovers, gradeLabel, todayKey } from "@/lib/school";
+import { fmtDate, fmtWeekday, fmtTime, fromJst, jstDateKey } from "@/lib/format";
+import { WEEKDAYS, coolOf, enrollmentCovers, gradeLabel, schoolSettings, todayKey } from "@/lib/school";
 import { ClassForm } from "../ClassForm";
+import { AttendanceSheet } from "./AttendanceSheet";
 import { GenerateForm } from "../GenerateForm";
 import { endEnrollment, enroll } from "../actions";
 
@@ -57,19 +58,25 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
       })
     : [];
   const manage = canManage(me.role);
+  const cfg = await schoolSettings();
+  const cool = coolOf(now, cfg.coolMonths);
+  const coolCount = cool ? await db.slot.count({ where: { classId: c.id, status: "OPEN", startsAt: { gte: fromJst(cool.start), lt: fromJst(cool.next) } } }) : 0;
+  // このクラスで選べる受講プラン（対象・コースが同じもの）
+  const classPlans = await db.plan.findMany({ where: { kind: "MONTHLY", active: true, OR: [{ course: null }, { course: c.course, target: c.target }] }, orderBy: { sortOrder: "asc" } });
   const today = todayKey();
 
   return (
     <>
       <PageHeader title={c.name} back="/classes" />
       <div className="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
-        <span className="font-semibold">{c.target === "JUNIOR" ? "ジュニア" : "一般"}</span>
+        <span className="font-semibold">{c.target === "JUNIOR" ? "ジュニア" : "成人"}</span>
         <span>毎週{WEEKDAYS[c.weekday]}曜日 {c.startTime}〜（{c.durationMin}分）</span>
         <span>{c.court.name}</span>
         {c.level && <span>レベル {c.level.name}</span>}
         <span>コーチ {c.coach?.name ?? "未定"}</span>
         <span>月謝 {c.plan ? `${c.plan.name} ¥${c.plan.price.toLocaleString()}` : "未設定"}</span>
         <span>在籍 {current.length}/{c.capacity}名</span>
+        {cool && <span className={coolCount === cfg.lessonsPerCool ? "" : "font-semibold text-amber-700"}>{cool.label}：{coolCount}/{cfg.lessonsPerCool}回</span>}
         {!c.active && <Badge>停止中</Badge>}
       </div>
 
@@ -105,6 +112,11 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
                 </ul>
               </details>
             )}
+          </div>
+
+          <div className="card">
+            <h2 className="border-b px-4 py-3 font-semibold">出欠表{cool ? `（${cool.label}）` : ""}</h2>
+            <AttendanceSheet classId={c.id} coolMonths={cfg.coolMonths} at={now} />
           </div>
 
           <div className="card overflow-x-auto">
@@ -151,9 +163,13 @@ export default async function ClassPage({ params, searchParams }: { params: Prom
                   <li key={m.id} className="py-3">
                     <p className="text-sm font-medium">{m.lastName} {m.firstName}<span className="ml-2 text-xs text-slate-500">No.{String(m.memberNo).padStart(6, "0")}</span></p>
                     {enrolledIds.has(m.id) ? <p className="mt-1 text-xs text-slate-500">在籍中です</p> : (
-                      <ActionForm action={enroll} className="mt-2 flex items-center gap-2">
+                      <ActionForm action={enroll} className="mt-2 flex flex-wrap items-center gap-2">
                         <input type="hidden" name="classId" value={c.id} />
                         <input type="hidden" name="memberId" value={m.id} />
+                        <select className="input" name="planId" defaultValue="" aria-label="受講プラン">
+                          <option value="">標準プラン</option>
+                          {classPlans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
                         <input className="input" type="date" name="startDate" defaultValue={today} aria-label="在籍開始日" />
                         <Submit className="btn-primary btn-sm">在籍登録</Submit>
                       </ActionForm>

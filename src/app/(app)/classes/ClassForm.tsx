@@ -10,8 +10,15 @@ export function ClassForm({ c, levels, courts, coaches, plans }: { c?: SchoolCla
       <fieldset>
         <span className="label">対象</span>
         <div className="flex gap-4 text-sm">
-          <label className="flex items-center gap-1.5"><input type="radio" name="target" value="ADULT" defaultChecked={(c?.target ?? "ADULT") === "ADULT"} />一般</label>
+          <label className="flex items-center gap-1.5"><input type="radio" name="target" value="ADULT" defaultChecked={(c?.target ?? "ADULT") === "ADULT"} />成人</label>
           <label className="flex items-center gap-1.5"><input type="radio" name="target" value="JUNIOR" defaultChecked={c?.target === "JUNIOR"} />ジュニア</label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <span className="label">コース</span>
+        <div className="flex gap-4 text-sm">
+          <label className="flex items-center gap-1.5"><input type="radio" name="course" value="ENJOY" defaultChecked={(c?.course ?? "ENJOY") === "ENJOY"} />エンジョイ</label>
+          <label className="flex items-center gap-1.5"><input type="radio" name="course" value="ACADEMY" defaultChecked={c?.course === "ACADEMY"} />アカデミー</label>
         </div>
       </fieldset>
       <label className="block"><span className="label">クラス名</span><input className="input" name="name" defaultValue={c?.name} placeholder="例：初級 月曜10時" required /></label>
@@ -25,18 +32,18 @@ export function ClassForm({ c, levels, courts, coaches, plans }: { c?: SchoolCla
         <label className="block"><span className="label">時間(分)</span><input className="input" type="number" min={15} step={15} name="durationMin" defaultValue={c?.durationMin ?? 90} /></label>
         <label className="block"><span className="label">定員</span><input className="input" type="number" min={1} name="capacity" defaultValue={c?.capacity ?? 8} /></label>
       </div>
-      <label className="block"><span className="label">レベル</span>
+      <label className="block"><span className="label">段階（アカデミー）</span>
         <select className="input" name="levelId" defaultValue={c?.levelId ?? ""}>
           <option value="">（なし）</option>
           {levels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
       </label>
-      <label className="block"><span className="label">月謝</span>
+      <label className="block"><span className="label">標準の受講プラン（月謝）</span>
         <select className="input" name="planId" defaultValue={c?.planId ?? ""}>
           <option value="">（未設定）</option>
           {plans.map((p) => <option key={p.id} value={p.id}>{p.name}（¥{p.price.toLocaleString()}）</option>)}
         </select>
-        <span className="mt-1 block text-xs text-slate-500">「会員プラン」の月額プランから選びます</span>
+        <span className="mt-1 block text-xs text-slate-500">在籍登録のときに、会員ごとに月8回・フリーなどへ変えられます</span>
       </label>
       <label className="block"><span className="label">コート</span>
         <select className="input" name="courtId" defaultValue={c?.courtId ?? courts[0]?.id} required>

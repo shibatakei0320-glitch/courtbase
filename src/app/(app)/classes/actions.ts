@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import { BookingError } from "@/lib/booking";
 import { bool, int, optStr, str, type ActionState } from "@/lib/action";
 import { addDays, fmtDate, fromJst } from "@/lib/format";
-import { enrolledCount, generateLessons, syncClassReservations, syncMember, todayKey } from "@/lib/school";
+import { enrolledCount, expireCreditsAfter, generateLessons, syncClassReservations, syncMember, todayKey } from "@/lib/school";
 import { isMonth } from "@/lib/tuition";
 
 const MANAGERS = ["OWNER", "ADMIN"] as const;
@@ -45,6 +45,7 @@ export async function saveClass(_: ActionState, fd: FormData): Promise<ActionSta
     levelId: optStr(fd, "levelId"),
     coachId: optStr(fd, "coachId"),
     planId: optStr(fd, "planId"),
+    course: str(fd, "course") === "ACADEMY" ? "ACADEMY" : "ENJOY",
     target: str(fd, "target") === "JUNIOR" ? ("JUNIOR" as const) : ("ADULT" as const),
     durationMin: Math.min(600, Math.max(15, int(fd, "durationMin", 90))),
     capacity: Math.max(1, int(fd, "capacity", 8)),
@@ -109,14 +110,23 @@ export async function enroll(_: ActionState, fd: FormData): Promise<ActionState>
   const startDate = fromJst(start);
   const existing = await db.enrollment.findFirst({ where: { classId, memberId, OR: [{ endDate: null }, { endDate: { gte: startDate } }] } });
   if (existing) return { error: "この会員はすでにこのクラスに在籍しています" };
-  const n = await enrolledCount(classId, startDate);
-  if (n >= c.capacity) return { error: `定員（${c.capacity}名）に達しています` };
-  await db.enrollment.create({ data: { classId, memberId, startDate } });
+  const planId = optStr(fd, "planId") ?? c.planId;
+  const plan = planId ? await db.plan.findUnique({ where: { id: planId } }) : null;
+  const isFree = plan?.freeMax != null;
+  if (!isFree) {
+    const n = await enrolledCount(classId, startDate);
+    if (n >= c.capacity) return { error: `定員（${c.capacity}名）に達しています` };
+  }
+  await db.enrollment.create({ data: { classId, memberId, startDate, planId } });
   const s = await syncClassReservations(classId, memberId);
-  await audit(me.id, "class.enroll", classId, `${m.lastName} ${m.firstName} ${start}〜`);
+  await audit(me.id, "class.enroll", classId, `${m.lastName} ${m.firstName} ${start}〜 ${plan?.name ?? ""}`);
   revalidatePath(`/classes/${classId}`);
   revalidatePath(`/members/${memberId}`);
-  return { ok: `${m.lastName} ${m.firstName}さんを在籍登録しました（今後の${s.added}回に出席予定を入れました）` };
+  return {
+    ok: isFree
+      ? `${m.lastName} ${m.firstName}さんを「${plan!.name}」で登録しました（月${plan!.freeMax}回まで、会員ページから空いている回を予約できます）`
+      : `${m.lastName} ${m.firstName}さんを在籍登録しました（今後の${s.added}回に出席予定を入れました）`,
+  };
 }
 
 /** 在籍の終了（退会・クラス変更）。終了日より後の出席予定は消す */
@@ -134,6 +144,7 @@ export async function endEnrollment(_: ActionState, fd: FormData): Promise<Actio
     await db.enrollment.update({ where: { id }, data: { endDate } });
   }
   const s = await syncClassReservations(e.classId, e.memberId);
+  await expireCreditsAfter(e.memberId);
   await audit(me.id, "class.unenroll", e.classId, `${e.memberId} 〜${end}`);
   revalidatePath(`/classes/${e.classId}`);
   revalidatePath(`/members/${e.memberId}`);
@@ -154,6 +165,7 @@ export async function withdrawAll(_: ActionState, fd: FormData): Promise<ActionS
     else await db.enrollment.update({ where: { id: e.id }, data: { endDate } });
   }
   const s = await syncMember(memberId);
+  await expireCreditsAfter(memberId);
   await audit(me.id, "member.withdraw", memberId, `〜${end}`);
   revalidatePath(`/members/${memberId}`);
   return { ok: `${fmtDate(endDate)}で退会の手続きをしました（${list.length}クラス、以降の出席予定 ${s.removed}回を外しました）。会員ステータスは最終日の後に「退会」に変更してください` };
@@ -177,7 +189,7 @@ export async function transferEnrollment(_: ActionState, fd: FormData): Promise<
   const lastDay = fromJst(addDays(date, -1));
   await db.$transaction([
     lastDay < e.startDate ? db.enrollment.delete({ where: { id: e.id } }) : db.enrollment.update({ where: { id: e.id }, data: { endDate: lastDay } }),
-    db.enrollment.create({ data: { classId: to.id, memberId: e.memberId, startDate, endDate: e.endDate } }),
+    db.enrollment.create({ data: { classId: to.id, memberId: e.memberId, startDate, endDate: e.endDate, planId: optStr(fd, "planId") ?? e.planId ?? to.planId } }),
   ]);
   await syncClassReservations(e.classId, e.memberId);
   const s = await syncClassReservations(to.id, e.memberId);
@@ -253,4 +265,14 @@ export async function updateCredit(_: ActionState, fd: FormData): Promise<Action
   revalidatePath("/makeups");
   revalidatePath(`/members/${c.memberId}`);
   return { ok: "更新しました" };
+}
+
+/** 48K萩校のコース・時間割・料金をまとめて登録 */
+export async function applyTemplate(_: ActionState, _fd: FormData): Promise<ActionState> {
+  const me = await requireStaff(["OWNER", "ADMIN"]);
+  const { applyHagi48k } = await import("@/lib/templates/hagi48k");
+  const r = await applyHagi48k();
+  await audit(me.id, "class.template", "48K萩校", JSON.stringify(r));
+  revalidatePath("/classes", "layout");
+  return { ok: `登録しました：クラス ${r.classes}・受講プラン ${r.plans}・段階 ${r.levels}・コート ${r.courts}（すでにあるものはそのまま）。振替のルールとクール制も設定しました` };
 }

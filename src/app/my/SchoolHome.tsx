@@ -24,7 +24,7 @@ export async function SchoolHome({ searchParams }: { searchParams: Promise<{ pai
       const [enrolled, next, credits] = await Promise.all([
         db.enrollment.count({ where: { memberId: m.id, OR: [{ endDate: null }, { endDate: { gte: new Date(now.getTime() - 86400_000) } }] } }),
         db.reservation.findFirst({
-          where: { memberId: m.id, kind: { in: ["REGULAR", "MAKEUP"] }, status: "RESERVED", slot: { status: "OPEN", startsAt: { gt: now } } },
+          where: { memberId: m.id, kind: { in: ["REGULAR", "MAKEUP", "FREE"] }, status: "RESERVED", slot: { status: "OPEN", startsAt: { gt: now } } },
           include: { slot: { include: { court: true } } },
           orderBy: { slot: { startsAt: "asc" } },
         }),
@@ -68,7 +68,7 @@ export async function SchoolHome({ searchParams }: { searchParams: Promise<{ pai
                 {fam.length > 1 && <p className="text-sm text-[#5B6661]">次のレッスン</p>}
                 <p className="text-2xl font-bold tracking-tight">{mdw(next.slot.startsAt)}</p>
                 <p className="mt-0.5 text-lg">{hm(next.slot.startsAt)}〜{hm(next.slot.endsAt)}</p>
-                <p className="mt-1 text-base text-[#5B6661]">{next.slot.title}・{next.slot.court.name}{next.kind === "MAKEUP" && "（振替）"}</p>
+                <p className="mt-1 text-base text-[#5B6661]">{next.slot.title}・{next.slot.court.name}{next.kind === "MAKEUP" && "（振替）"}{next.kind === "FREE" && "（フリー）"}</p>
               </div>
             ) : (
               <p className="mt-3 text-base text-[#5B6661]">予定されているレッスンはありません。</p>

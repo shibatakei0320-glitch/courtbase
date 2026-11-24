@@ -48,6 +48,7 @@ enum ReservationKind {
   NORMAL
   REGULAR
   MAKEUP
+  FREE // フリーコースの受講（毎月の上限回数まで、自分で予約）
 }
 
 enum CreditStatus {
@@ -191,9 +192,19 @@ model Plan {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
 
-  members  Member[]
-  payments Payment[]
-  classes  SchoolClass[]
+  // スクールの受講プラン（例：ジュニア アカデミー スタンダード 月8回）
+  course          String? // ENJOY | ACADEMY
+  target          ClassTarget?
+  levelId         String? // アカデミーの段階（スタンダード等）
+  level           Level?       @relation(fields: [levelId], references: [id], onDelete: SetNull)
+  lessonsPerMonth Int? // 月4回 / 月8回（＝週1クラス / 週2クラス）
+  freeMax         Int? // フリーコース：月の上限回数（在籍クラスを決めず、空きのある回を予約）
+  extraDiscount   Int          @default(0) // 2クラス目以降の割引（例：ジュニアエンジョイ 週2回以上で1クラスにつき2,200円引き）
+
+  members     Member[]
+  payments    Payment[]
+  classes     SchoolClass[]
+  enrollments Enrollment[]
 }
 
 model Court {
@@ -323,7 +334,10 @@ model Setting {
   // スクール（定期クラス・欠席・振替）
   absenceDeadlineHours Int     @default(0) // 欠席連絡の期限（開始の何時間前まで。0=開始まで）
   makeupValidDays      Int     @default(60) // 振替の有効期限（欠席したレッスン日から何日）
-  makeupLevelRule      String  @default("SAME_OR_LOWER") // SAME | SAME_OR_LOWER | ANY
+  makeupLevelRule      String  @default("SAME_OR_LOWER") // SAME | ONE_BELOW | SAME_OR_LOWER | ANY
+  makeupCrossCourse    Boolean @default(true) // 一般（成人）はエンジョイ・アカデミーのコースをまたいで振替できる
+  coolMonths           Int     @default(3) // クール制（3か月で1クール、退会はクールの終わり）。0ならクール制なし
+  lessonsPerCool       Int     @default(12) // 1クールのレッスン回数
   // 月謝
   admissionFee         Int     @default(0) // 入会金（初めての月謝に加算）
   leaveFee             Int     @default(0) // 休会費（休会中の月）
@@ -453,6 +467,7 @@ model Level {
   createdAt DateTime @default(now())
 
   classes SchoolClass[]
+  plans   Plan[]
 }
 
 /// 毎週決まった曜日・時間に行う定期クラス。回（Slot）は月ごとなどにまとめて生成する
@@ -465,6 +480,7 @@ model SchoolClass {
   id          String      @id @default(cuid())
   name        String
   target      ClassTarget @default(ADULT) // 一般 / ジュニア（振替は同じ区分のクラスのみ）
+  course      String      @default("ENJOY") // ENJOY（エンジョイ）| ACADEMY（アカデミー）
   levelId     String?
   level       Level?      @relation(fields: [levelId], references: [id], onDelete: SetNull)
   weekday     Int // 0=日 … 6=土（JST）
@@ -494,6 +510,8 @@ model Enrollment {
   member      Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
   startDate   DateTime
   endDate     DateTime?
+  planId      String? // 受講プラン（月謝の計算に使う。なければクラスの月謝）
+  plan        Plan?       @relation(fields: [planId], references: [id], onDelete: SetNull)
   createdAt   DateTime    @default(now())
 
   @@index([classId])
@@ -510,6 +528,7 @@ model MakeupCredit {
   sourceReservationId String?      @unique // 欠席したレッスンの予約
   levelRank           Int? // 欠席したクラスのレベル（振替先の制限に使う）
   target              ClassTarget? // 欠席したクラスの区分（一般 / ジュニア）
+  course              String? // 欠席したクラスのコース（ENJOY / ACADEMY）
   expiresAt           DateTime
   usedReservationId   String?      @unique // 振替で取った予約
   note                String?

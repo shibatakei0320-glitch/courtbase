@@ -4,7 +4,7 @@ import { BookingError } from "./booking";
 import { recordLine, replyMessages, type LineMsg } from "./line-message";
 import { appUrl } from "./url";
 import { familyOf } from "./family";
-import { fmtTime, jstDateKey } from "./format";
+import { expiryText, fmtTime, jstDateKey } from "./format";
 import { WEEKDAYS, absentableLessons, availableCredits, bookMakeup, makeupCandidates, memberReportAbsence } from "./school";
 
 /*
@@ -117,7 +117,7 @@ export async function botAction(lineUserId: string, data: URLSearchParams): Prom
       await db.auditLog.create({ data: { action: "absence.line", target: r.id } });
       return [
         text(
-          `${multi ? `${byId.get(r.memberId)?.firstName}さんの` : ""}欠席を受け付けました。\n${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜 ${r.slot.title}\n\n振替が1回分付きました${credit ? `（${jstDateKey(credit.expiresAt).replaceAll("-", "/")}まで）` : ""}。`,
+          `${multi ? `${byId.get(r.memberId)?.firstName}さんの` : ""}欠席を受け付けました。\n${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)}〜 ${r.slot.title}\n\n振替が1回分付きました${credit ? `（${expiryText(credit.expiresAt, "")}まで）` : ""}。`,
           [pb("続けて振替を予約", { a: "makeup_menu", m: r.memberId }), ...menuItems().slice(0, 1), ...menuItems().slice(2)],
         ),
       ];
@@ -133,7 +133,7 @@ export async function botAction(lineUserId: string, data: URLSearchParams): Prom
     if (!pick) return [text("どなたの振替を予約しますか？", withCredits.map((x) => pb(`${x.m.firstName}さん（${x.credits.length}回）`, { a: "makeup_menu", m: x.m.id })))];
     const credit = pick.credits[0];
     const slots = (await makeupCandidates(pick.m.id, credit)).slice(0, 12);
-    const head = `${multi ? `${pick.m.firstName}さんの` : ""}使える振替：${pick.credits.length}回（いちばん早い期限 ${jstDateKey(credit.expiresAt).replaceAll("-", "/")}）`;
+    const head = `${multi ? `${pick.m.firstName}さんの` : ""}使える振替：${pick.credits.length}回（期限：${expiryText(credit.expiresAt, "")}）`;
     if (!slots.length) return [text(`${head}\n\nいま空きのある回はありません。空きが出ると、ここから選べるようになります。`)];
     return [
       text(
@@ -177,7 +177,7 @@ export async function botAction(lineUserId: string, data: URLSearchParams): Prom
       ]);
       if (multi && !lessons.length && !credits.length) continue;
       const lines = lessons.map((r) => `・${md(r.slot.startsAt)} ${fmtTime(r.slot.startsAt)} ${r.slot.title}${r.kind === "MAKEUP" ? "（振替）" : ""}`);
-      blocks.push(`■ ${m.lastName} ${m.firstName}さん\n${lines.length ? lines.join("\n") : "（5週間以内の予定はありません）"}\n使える振替：${credits.length}回${credits[0] ? `（${jstDateKey(credits[0].expiresAt).replaceAll("-", "/")}まで）` : ""}`);
+      blocks.push(`■ ${m.lastName} ${m.firstName}さん\n${lines.length ? lines.join("\n") : "（5週間以内の予定はありません）"}\n使える振替：${credits.length}回${credits[0] ? `（${expiryText(credits[0].expiresAt, "")}まで）` : ""}`);
     }
     return [text(`これからの予定\n\n${blocks.join("\n\n") || "（予定はありません）"}`)];
   }

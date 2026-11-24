@@ -15,7 +15,10 @@ import { addDays, fromJst, jstDateKey } from "./format";
  */
 
 const ACTIVE = { in: ["RESERVED", "ATTENDED"] } as Prisma.EnumReservationStatusFilter;
-export const LEVEL_RULE = { SAME: "同じレベルのみ", SAME_OR_LOWER: "同じか下のレベル", ANY: "レベル制限なし" } as const;
+export const LEVEL_RULE = { SAME: "同じレベルのみ", ONE_BELOW: "登録クラスか1つ下のレベル", SAME_OR_LOWER: "同じか下のレベル", ANY: "レベル制限なし" } as const;
+export const COURSE_LABEL: Record<string, string> = { ENJOY: "エンジョイ", ACADEMY: "アカデミー" };
+/** 振替の有効期限なし（在籍中は有効）のときの期限 */
+const NO_EXPIRY_DAYS = 3650;
 export type LevelRule = keyof typeof LEVEL_RULE;
 export const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -24,8 +27,11 @@ export async function schoolSettings() {
   const rule = (s?.makeupLevelRule ?? "SAME_OR_LOWER") as LevelRule;
   return {
     absenceDeadlineHours: s?.absenceDeadlineHours ?? 0,
-    makeupValidDays: s?.makeupValidDays ?? 60,
+    makeupValidDays: s?.makeupValidDays ?? 60, // 0 = 期限なし（在籍中は有効）
     levelRule: rule in LEVEL_RULE ? rule : ("SAME_OR_LOWER" as LevelRule),
+    crossCourse: s?.makeupCrossCourse ?? true,
+    coolMonths: s?.coolMonths ?? 3,
+    lessonsPerCool: s?.lessonsPerCool ?? 12,
     cancelDeadlineHours: s?.cancelDeadlineHours ?? 24,
   };
 }
@@ -45,14 +51,50 @@ export function enrollmentCovers(e: { startDate: Date; endDate: Date | null }, a
 /** 振替先として選べるレベルか */
 export function levelAllowed(rule: LevelRule, fromRank: number | null | undefined, toRank: number | null | undefined) {
   if (rule === "ANY" || fromRank == null || toRank == null) return true;
-  return rule === "SAME" ? toRank === fromRank : toRank <= fromRank;
+  if (rule === "SAME") return toRank === fromRank;
+  if (rule === "ONE_BELOW") return toRank === fromRank || toRank === fromRank - 1;
+  return toRank <= fromRank;
+}
+
+/**
+ * 振替先として選べる回か（一般／ジュニア・コース・レベル）
+ * - 一般とジュニアはまたげない
+ * - ジュニアは同じコース（エンジョイ／アカデミー）のみ。一般は設定でコースをまたげる
+ * - レベル（アカデミーの段階）は、同じコースどうしのときだけ見る
+ */
+export function makeupAllowed(
+  cfg: { levelRule: LevelRule; crossCourse: boolean },
+  from: { target?: ClassTarget | null; course?: string | null; levelRank?: number | null },
+  to: { target?: ClassTarget | null; course?: string | null; levelRank?: number | null },
+) {
+  if (!targetAllowed(from.target, to.target)) return false;
+  const sameCourse = !from.course || !to.course || from.course === to.course;
+  if (!sameCourse) return to.target === "ADULT" && cfg.crossCourse;
+  return levelAllowed(cfg.levelRule, from.levelRank, to.levelRank);
+}
+
+/** 振替の有効期限 */
+export function makeupExpiry(lessonAt: Date, validDays: number) {
+  return new Date(lessonAt.getTime() + (validDays > 0 ? validDays : NO_EXPIRY_DAYS) * 86400_000);
+}
+
+/** クール（3か月で1クール：4–6月・7–9月・10–12月・1–3月） */
+export function coolOf(d: Date, months = 3) {
+  const [y, m] = jstDateKey(d).split("-").map(Number);
+  if (months <= 0) return null;
+  const startIdx = Math.floor((m - 1) / months) * months; // 0-based month
+  const start = `${y}-${String(startIdx + 1).padStart(2, "0")}-01`;
+  const endM = startIdx + months; // exclusive
+  const end = endM >= 12 ? `${y + 1}-${String(endM - 11).padStart(2, "0")}-01` : `${y}-${String(endM + 1).padStart(2, "0")}-01`;
+  const season = months === 3 ? ["冬", "春", "夏", "秋"][Math.floor((m - 1) / 3)] + "クール" : `${startIdx + 1}月〜クール`;
+  return { start, last: addDays(end, -1), next: end, label: `${y}年 ${season}（${startIdx + 1}〜${endM}月）` };
 }
 
 /** 一般とジュニアはまたいで振替できない（区分のない権利はどちらにも使える） */
 export function targetAllowed(from: ClassTarget | null | undefined, to: ClassTarget | null | undefined) {
   return !from || !to || from === to;
 }
-export const TARGET_LABEL: Record<ClassTarget, string> = { ADULT: "一般", JUNIOR: "ジュニア" };
+export const TARGET_LABEL: Record<ClassTarget, string> = { ADULT: "成人", JUNIOR: "ジュニア" };
 
 /**
  * 学年（日本の学校年度：4月2日〜翌4月1日生まれが同じ学年）。
@@ -123,7 +165,10 @@ export async function syncClassReservations(classId: string, memberId?: string) 
       where: { classId, status: "OPEN", startsAt: { gt: now } },
       include: { reservations: { where: memberId ? { memberId } : {}, select: { id: true, memberId: true, kind: true, status: true } } },
     }),
-    db.enrollment.findMany({ where: { classId, ...(memberId ? { memberId } : {}), member: { status: "ACTIVE" } }, include: { member: { select: { leaves: true } } } }),
+    db.enrollment.findMany({
+      where: { classId, ...(memberId ? { memberId } : {}), member: { status: "ACTIVE" }, OR: [{ planId: null }, { plan: { freeMax: null } }] },
+      include: { member: { select: { leaves: true } } },
+    }),
   ]);
   let added = 0;
   let removed = 0;
@@ -191,7 +236,8 @@ export async function recordAbsence(reservationId: string, opts: { reason?: stri
         sourceReservationId: r.id,
         levelRank: r.slot.schoolClass?.level?.rank ?? null,
         target: r.slot.schoolClass?.target ?? null,
-        expiresAt: new Date(r.slot.startsAt.getTime() + makeupValidDays * 86400_000),
+        course: r.slot.schoolClass?.course ?? null,
+        expiresAt: makeupExpiry(r.slot.startsAt, makeupValidDays),
         staffId: opts.staffId ?? null,
       },
     });
@@ -218,7 +264,7 @@ export async function undoAbsence(reservationId: string) {
 
 /** 振替の権利を使って、クラスの回を予約する */
 export async function bookMakeup(creditId: string, slotId: string, memberId: string) {
-  const { levelRule } = await schoolSettings();
+  const cfg = await schoolSettings();
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Slot" WHERE id = ${slotId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "MakeupCredit" WHERE id = ${creditId} FOR UPDATE`;
@@ -232,8 +278,8 @@ export async function bookMakeup(creditId: string, slotId: string, memberId: str
     if (!slot || !slot.classId || slot.status !== "OPEN") throw new BookingError("この回は振替できません");
     if (slot.startsAt <= new Date()) throw new BookingError("開始済みの回には振替できません");
     if (slot.startsAt > credit.expiresAt) throw new BookingError("振替の有効期限より後の回です");
-    if (!levelAllowed(levelRule, credit.levelRank, slot.schoolClass?.level?.rank)) throw new BookingError("この回のレベルには振替できません");
-    if (!targetAllowed(credit.target, slot.schoolClass?.target)) throw new BookingError(credit.target === "JUNIOR" ? "ジュニアの振替は、ジュニアクラスの回にのみ使えます" : "一般の振替は、一般クラスの回にのみ使えます");
+    if (!targetAllowed(credit.target, slot.schoolClass?.target)) throw new BookingError(credit.target === "JUNIOR" ? "ジュニアの振替は、ジュニアクラスの回にのみ使えます" : "成人の振替は、成人クラスの回にのみ使えます");
+    if (!makeupAllowed(cfg, credit, { target: slot.schoolClass?.target, course: slot.schoolClass?.course, levelRank: slot.schoolClass?.level?.rank })) throw new BookingError("この回のコース・レベルには振替できません");
     const dup = await tx.reservation.findFirst({ where: { slotId, memberId, OR: [{ status: ACTIVE }, { kind: "REGULAR" }] } });
     if (dup) throw new BookingError(dup.kind === "REGULAR" ? "在籍しているクラスの回には振替できません（欠席連絡の取り消しをご利用ください）" : "この回はすでに予約済みです");
     const count = await tx.reservation.count({ where: { slotId, status: ACTIVE } });
@@ -283,8 +329,8 @@ export function availableCredits(memberId: string) {
 }
 
 /** 振替先の候補（空きあり・期限内・レベル条件を満たす、まだ予約していない回） */
-export async function makeupCandidates(memberId: string, credit: { levelRank: number | null; target?: ClassTarget | null; expiresAt: Date }) {
-  const { levelRule } = await schoolSettings();
+export async function makeupCandidates(memberId: string, credit: { levelRank: number | null; target?: ClassTarget | null; course?: string | null; expiresAt: Date }) {
+  const cfg = await schoolSettings();
   const slots = await db.slot.findMany({
     where: { classId: { not: null }, status: "OPEN", startsAt: { gt: new Date(), lte: credit.expiresAt } },
     include: {
@@ -297,8 +343,7 @@ export async function makeupCandidates(memberId: string, credit: { levelRank: nu
     take: 300,
   });
   return slots
-    .filter((s) => levelAllowed(levelRule, credit.levelRank, s.schoolClass?.level?.rank))
-    .filter((s) => targetAllowed(credit.target, s.schoolClass?.target))
+    .filter((s) => makeupAllowed(cfg, credit, { target: s.schoolClass?.target, course: s.schoolClass?.course, levelRank: s.schoolClass?.level?.rank }))
     .filter((s) => !s.reservations.some((r) => r.memberId === memberId))
     .map((s) => ({ ...s, left: s.capacity - s.reservations.filter((r) => r.status === "RESERVED" || r.status === "ATTENDED").length }))
     .filter((s) => s.left > 0);
@@ -331,4 +376,88 @@ export async function absentableLessons(memberId: string, limit = 10) {
     take: limit + 5,
   });
   return list.filter((r) => Date.now() <= absenceDeadline(r.slot.startsAt, absenceDeadlineHours).getTime()).slice(0, limit);
+}
+
+// ---- フリーコース（在籍クラスを決めず、毎月の上限回数まで空きのある回を予約） ----
+
+const FREE_ACTIVE = { in: ["RESERVED", "ATTENDED"] } as Prisma.EnumReservationStatusFilter;
+
+/** 会員のフリーコースの登録（在籍中のもの）。登録クラスの段階・区分と、月の上限回数 */
+export async function freePlansOf(memberId: string, at = new Date()) {
+  const list = await db.enrollment.findMany({
+    where: { memberId, plan: { freeMax: { not: null } }, member: { status: "ACTIVE" } },
+    include: { plan: { include: { level: true } }, schoolClass: { include: { level: true } }, member: true },
+  });
+  return list
+    .filter((e) => enrollmentCovers(e, at) || e.startDate > at)
+    .map((e) => ({
+      enrollment: e,
+      max: e.plan!.freeMax!,
+      target: e.schoolClass.target,
+      course: e.schoolClass.course,
+      rank: e.schoolClass.level?.rank ?? e.plan!.level?.rank ?? null,
+      // ジュニアのプレーヤーフリーは、中学生以上なら成人アカデミーのプレーヤークラスにも参加できる
+      adultToo: e.schoolClass.target === "JUNIOR" && /^(中|高)/.test(gradeLabel(e.member.birthDate) ?? "") && /プレーヤー/.test(e.schoolClass.level?.name ?? e.plan!.level?.name ?? ""),
+    }));
+}
+
+/** その月にフリーで予約した回数 */
+export async function freeUsed(memberId: string, month: string) {
+  const [y, m] = month.split("-").map(Number);
+  const start = fromJst(`${month}-01`);
+  const end = fromJst(`${m === 12 ? y + 1 : y}-${String((m % 12) + 1).padStart(2, "0")}-01`);
+  return db.reservation.count({ where: { memberId, kind: "FREE", status: FREE_ACTIVE, slot: { startsAt: { gte: start, lt: end } } } });
+}
+
+function freeMatches(f: Awaited<ReturnType<typeof freePlansOf>>[number], c: { target: ClassTarget; course: string; level: { rank: number; name: string } | null }) {
+  if (c.course !== f.course) return false;
+  const rankOk = f.rank == null || c.level?.rank == null || c.level.rank <= f.rank;
+  if (c.target === f.target) return rankOk;
+  return f.adultToo && c.target === "ADULT" && /プレーヤー/.test(c.level?.name ?? "");
+}
+
+/** フリーで予約できる回（空きあり・段階が登録クラス以下・まだ予約していない） */
+export async function freeCandidates(memberId: string, days = 35) {
+  const plans = await freePlansOf(memberId);
+  if (!plans.length) return [];
+  const slots = await db.slot.findMany({
+    where: { classId: { not: null }, status: "OPEN", startsAt: { gt: new Date(), lte: new Date(Date.now() + days * 86400_000) } },
+    include: { court: true, instructor: { select: { name: true } }, schoolClass: { include: { level: true } }, reservations: { where: { OR: [{ status: FREE_ACTIVE }, { memberId }] }, select: { memberId: true, status: true } } },
+    orderBy: { startsAt: "asc" },
+  });
+  return slots
+    .filter((s) => s.schoolClass && plans.some((f) => freeMatches(f, s.schoolClass!)))
+    .filter((s) => !s.reservations.some((r) => r.memberId === memberId))
+    .map((s) => ({ ...s, left: s.capacity - s.reservations.filter((r) => r.status === "RESERVED" || r.status === "ATTENDED").length }))
+    .filter((s) => s.left > 0);
+}
+
+/** フリーの予約（月の上限・段階・定員を確認） */
+export async function bookFree(memberId: string, slotId: string) {
+  const plans = await freePlansOf(memberId);
+  if (!plans.length) throw new BookingError("フリーコースに登録されていません");
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Slot" WHERE id = ${slotId} FOR UPDATE`;
+    const slot = await tx.slot.findUnique({ where: { id: slotId }, include: { schoolClass: { include: { level: true } } } });
+    if (!slot?.schoolClass || slot.status !== "OPEN" || slot.startsAt <= new Date()) throw new BookingError("この回は予約できません");
+    const f = plans.find((p) => freeMatches(p, slot.schoolClass!) && enrollmentCovers(p.enrollment, slot.startsAt));
+    if (!f) throw new BookingError("この回はフリーコースの対象ではありません（登録クラスとその下のレベルのみ）");
+    const month = jstDateKey(slot.startsAt).slice(0, 7);
+    const used = await freeUsed(memberId, month);
+    if (used >= f.max) throw new BookingError(`${Number(month.slice(5))}月のフリーの上限（${f.max}回）に達しています`);
+    const dup = await tx.reservation.findFirst({ where: { slotId, memberId, status: FREE_ACTIVE } });
+    if (dup) throw new BookingError("この回はすでに予約済みです");
+    const count = await tx.reservation.count({ where: { slotId, status: FREE_ACTIVE } });
+    if (count >= slot.capacity) throw new BookingError("この回は満員です");
+    return tx.reservation.create({ data: { slotId, memberId, kind: "FREE" } });
+  });
+}
+
+/** 在籍がすべて終わる会員の振替は、最終日までで失効させる（振替は在籍中のみ有効） */
+export async function expireCreditsAfter(memberId: string) {
+  const open = await db.enrollment.findMany({ where: { memberId }, select: { endDate: true } });
+  if (!open.length || open.some((e) => !e.endDate)) return 0;
+  const last = new Date(Math.max(...open.map((e) => e.endDate!.getTime())) + 86400_000 - 1);
+  const { count } = await db.makeupCredit.updateMany({ where: { memberId, status: "AVAILABLE", expiresAt: { gt: last } }, data: { expiresAt: last } });
+  return count;
 }

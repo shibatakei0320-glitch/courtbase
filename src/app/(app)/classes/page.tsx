@@ -5,6 +5,9 @@ import { db } from "@/lib/db";
 import { WEEKDAYS, enrollmentCovers } from "@/lib/school";
 import { ClassForm } from "./ClassForm";
 import { GenerateForm } from "./GenerateForm";
+import { Timetable } from "./Timetable";
+import { ActionForm, Submit } from "@/components/ActionForm";
+import { applyTemplate } from "./actions";
 
 export const metadata = { title: "クラス" };
 
@@ -38,7 +41,17 @@ export default async function ClassesPage() {
       <PageHeader title="クラス（定期レッスン）" actions={<Link href="/makeups" className="btn-secondary">振替の管理</Link>} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {classes.length === 0 ? <div className="card"><Empty>クラスがありません。右のフォームから作成してください{levels.length === 0 && manage ? "（先に「レベル」を登録しておくと、振替先をレベルで制限できます）" : ""}</Empty></div> : byDay.map((d) => (
+          {classes.length > 0 && <Timetable classes={classes.map((c) => ({ ...c, enrolled: c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now).length }))} />}
+          {classes.length === 0 && manage && (
+            <div className="card border-brand-500 p-5">
+              <h2 className="font-semibold">48K萩校の時間割・料金をまとめて登録</h2>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">ホームページのコース・料金とクラススケジュール（火・水・金・土の23クラス）、アカデミーの段階（スタンダード／アドバンス／プレーヤー／トーナメント）、受講プラン（月4回・月8回・フリー）、振替のルール（登録クラスか1つ下・期限なし）、クール制を登録します。あとから自由に変更できます。</p>
+              <ActionForm action={applyTemplate} className="mt-3" confirm="48K萩校の時間割・料金を登録しますか？">
+                <Submit>まとめて登録</Submit>
+              </ActionForm>
+            </div>
+          )}
+          {classes.length === 0 ? <div className="card"><Empty>クラスがありません。右のフォームから作成してください</Empty></div> : <details><summary className="cursor-pointer px-1 text-sm text-brand-700">曜日ごとの一覧で見る</summary><div className="mt-3 space-y-6">{byDay.map((d) => (
             <div key={d.i} className="card overflow-x-auto">
               <h2 className="border-b px-4 py-3 font-semibold">{d.w}曜日</h2>
               <table className="table">
@@ -62,7 +75,7 @@ export default async function ClassesPage() {
                 </tbody>
               </table>
             </div>
-          ))}
+          ))}</div></details>}
         </div>
         {manage && (
           <div className="space-y-6">

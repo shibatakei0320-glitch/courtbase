@@ -145,8 +145,8 @@ export default async function MakeupsPage({ searchParams }: { searchParams: Prom
                   </label>
                   <label className="block"><span className="label">対象のクラス</span>
                     <select className="input" name="target" defaultValue="">
-                      <option value="">一般・ジュニアどちらでも</option>
-                      <option value="ADULT">一般のみ</option>
+                      <option value="">成人・ジュニアどちらでも</option>
+                      <option value="ADULT">成人のみ</option>
                       <option value="JUNIOR">ジュニアのみ</option>
                     </select>
                   </label>

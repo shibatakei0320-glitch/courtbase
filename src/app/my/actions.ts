@@ -15,7 +15,7 @@ import { createMemberSession, destroyMemberSession, getLinePending, LINE_PENDING
 import { stripe, stripeConfigured } from "@/lib/stripe";
 import { appUrl } from "@/lib/url";
 import { familyMember, familyOf } from "@/lib/family";
-import { bookMakeup, cancelMakeup, memberReportAbsence, undoAbsence } from "@/lib/school";
+import { bookFree, bookMakeup, cancelMakeup, memberReportAbsence, undoAbsence } from "@/lib/school";
 
 export async function memberLogout() {
   await destroyMemberSession();
@@ -186,6 +186,7 @@ export async function cancelMyReservation(_: ActionState, fd: FormData): Promise
   await audit(null, "reservation.member_cancel", r.id, amt ? `返金${amt}` : undefined);
   await notifyCanceled(r.id, amt);
   if (r.categoryId) await notifyWaitlist(r.categoryId);
+  if (r.kind === "FREE") redirect(`/my/school?m=${r.memberId}&freeCanceled=1`);
   redirect(`/my?canceled=${amt}`);
 }
 
@@ -418,4 +419,21 @@ export async function cancelTournamentEntry(_: ActionState, fd: FormData): Promi
   await audit(null, "tournament.member_cancel", e.id);
   revalidatePath("/my/tournaments");
   return { ok: "申込みを取り消しました" };
+}
+
+/** フリーコースの予約（本人または子ども） */
+export async function bookMyFree(_: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireMember();
+  const who = await familyMember(me, str(fd, "memberId"));
+  if (!who) return { error: "会員が見つかりません" };
+  let id: string;
+  try {
+    id = (await bookFree(who.id, str(fd, "slotId"))).id;
+  } catch (e) {
+    if (e instanceof BookingError) return { error: e.message };
+    throw e;
+  }
+  await audit(null, "free.member_book", id);
+  await notifyBooked(id);
+  redirect(`/my/school?m=${who.id}&booked=1`);
 }

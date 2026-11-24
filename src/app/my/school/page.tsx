@@ -2,15 +2,15 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireMember } from "@/lib/member-auth";
 import { ActionForm, Submit } from "@/components/ActionForm";
-import { fmtDate, jstDateKey, yen } from "@/lib/format";
+import { expiryText, fmtDate, jstDateKey, yen } from "@/lib/format";
 import { familyMember, familyOf } from "@/lib/family";
-import { LEVEL_RULE, TARGET_LABEL, WEEKDAYS, absenceDeadline, enrollmentCovers, gradeLabel, schoolSettings } from "@/lib/school";
+import { LEVEL_RULE, TARGET_LABEL, WEEKDAYS, absenceDeadline, coolOf, enrollmentCovers, freePlansOf, gradeLabel, schoolSettings } from "@/lib/school";
 import { cancelMyReservation, reportAbsence, undoMyAbsence } from "../actions";
 import { Chip, FamilyTabs, Notice, hm, mdw, ui } from "../ui";
 
 export const metadata = { title: "レッスン予定" };
 
-export default async function SchoolPage({ searchParams }: { searchParams: Promise<{ m?: string; booked?: string; makeupCanceled?: string }> }) {
+export default async function SchoolPage({ searchParams }: { searchParams: Promise<{ m?: string; booked?: string; makeupCanceled?: string; freeCanceled?: string }> }) {
   const me = await requireMember();
   const sp = await searchParams;
   const fam = await familyOf(me);
@@ -21,9 +21,9 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
   const until = new Date(now.getTime() + 35 * 86400_000);
   const [settings, enrollments, lessons, credits, invoices, leaves] = await Promise.all([
     schoolSettings(),
-    db.enrollment.findMany({ where: { memberId: who.id }, include: { schoolClass: { include: { level: true, court: true, coach: { select: { name: true } } } } }, orderBy: { startDate: "asc" } }),
+    db.enrollment.findMany({ where: { memberId: who.id }, include: { plan: true, schoolClass: { include: { level: true, court: true, coach: { select: { name: true } } } } }, orderBy: { startDate: "asc" } }),
     db.reservation.findMany({
-      where: { memberId: who.id, kind: { in: ["REGULAR", "MAKEUP"] }, slot: { startsAt: { gt: new Date(now.getTime() - 3 * 3600_000), lte: until } } },
+      where: { memberId: who.id, kind: { in: ["REGULAR", "MAKEUP", "FREE"] }, slot: { startsAt: { gt: new Date(now.getTime() - 3 * 3600_000), lte: until } } },
       include: { slot: { include: { court: true } } },
       orderBy: { slot: { startsAt: "asc" } },
     }),
@@ -32,7 +32,9 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
     db.leave.findMany({ where: { memberId: who.id, toMonth: { gte: jstDateKey(now).slice(0, 7) } }, orderBy: { fromMonth: "asc" } }),
   ]);
   const current = enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now);
-  const rows = lessons.filter((r) => !(r.kind === "MAKEUP" && r.status === "CANCELED"));
+  const rows = lessons.filter((r) => !((r.kind === "MAKEUP" || r.kind === "FREE") && r.status === "CANCELED"));
+  const freePlans = await freePlansOf(who.id);
+  const cool = coolOf(now, settings.coolMonths);
   const usedSources = new Set(
     (await db.makeupCredit.findMany({ where: { sourceReservationId: { in: rows.map((r) => r.id) }, status: "USED" }, select: { sourceReservationId: true } })).map((c) => c.sourceReservationId),
   );
@@ -49,12 +51,22 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
 
       {sp.booked && <Notice>振替の予約が完了しました。</Notice>}
       {sp.makeupCanceled && <Notice>振替の予約を取り消しました。振替の権利は戻っています。</Notice>}
+      {sp.freeCanceled && <Notice>フリーの予約を取り消しました。</Notice>}
+      {freePlans.length > 0 && (
+        <section className={`${ui.card} flex items-center justify-between gap-4`}>
+          <div>
+            <p className="text-sm text-[#5B6661]">フリーコース</p>
+            <p className="text-base font-bold">空いている回を自由に予約できます</p>
+          </div>
+          <Link href={`/my/school/free?m=${who.id}`} className={`${ui.primary} !w-auto`}>予約する</Link>
+        </section>
+      )}
 
       <section className={`${ui.card} flex items-center justify-between gap-4`}>
         <div>
           <p className="text-sm text-[#5B6661]">使える振替</p>
           <p className="text-3xl font-bold">{credits.length}<span className="ml-1 text-base font-normal">回</span></p>
-          {credits[0] && <p className="text-sm text-[#5B6661]">いちばん早い期限 {fmtDate(credits[0].expiresAt)}</p>}
+          {credits[0] && <p className="text-sm text-[#5B6661]">期限：{expiryText(credits[0].expiresAt, "")}</p>}
         </div>
         <Link href={`/my/school/makeup?m=${who.id}`} className={`${credits.length ? ui.primary : ui.secondary} !w-auto`}>振替を予約</Link>
       </section>
@@ -62,7 +74,7 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
       <section>
         <h2 className={ui.h2}>これからのレッスン</h2>
         <p className="mb-3 px-1 text-sm leading-relaxed text-[#5B6661]">
-          お休みするときは、{settings.absenceDeadlineHours > 0 ? `開始の${settings.absenceDeadlineHours}時間前` : "開始時刻"}までに「お休みする」を押してください。振替が1回分付きます（{settings.makeupValidDays}日以内・{LEVEL_RULE[settings.levelRule]}のクラス）。
+          お休みするときは、{settings.absenceDeadlineHours > 0 ? `開始の${settings.absenceDeadlineHours}時間前` : "開始時刻"}までに「お休みする」を押してください。振替が1回分付きます（{settings.makeupValidDays > 0 ? `${settings.makeupValidDays}日以内` : "回数・期限の制限なし、在籍中のみ"}・{LEVEL_RULE[settings.levelRule]}のクラス{settings.crossCourse ? "。成人はエンジョイ・アカデミーをまたいで振替できます" : ""}）。
         </p>
         {rows.length === 0 ? (
           <p className={`${ui.card} text-base text-[#5B6661]`}>5週間以内の予定はありません。</p>
@@ -88,6 +100,7 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
                         : r.status === "ATTENDED" ? <Chip tone="ok">出席</Chip>
                         : r.status === "NO_SHOW" ? <Chip tone="warn">欠席</Chip>
                         : r.kind === "MAKEUP" ? <Chip tone="info">振替で参加</Chip>
+                        : r.kind === "FREE" ? <Chip tone="info">フリーで予約</Chip>
                         : <Chip tone="ok">出席予定</Chip>}
                     </div>
                   </div>
@@ -102,6 +115,12 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
                     <ActionForm action={undoMyAbsence} confirm="お休みを取り消して、出席に戻しますか？（付いた振替はなくなります）" className="mt-3">
                       <input type="hidden" name="id" value={r.id} />
                       <Submit className={`text-sm ${ui.link}`}>やっぱり出席する</Submit>
+                    </ActionForm>
+                  )}
+                  {r.kind === "FREE" && r.status === "RESERVED" && !started && (
+                    <ActionForm action={cancelMyReservation} confirm="このフリーの予約を取り消しますか？" className="mt-3">
+                      <input type="hidden" name="id" value={r.id} />
+                      <Submit className={`text-sm ${ui.link}`}>予約を取り消す</Submit>
                     </ActionForm>
                   )}
                   {makeupCancelable && (
@@ -119,6 +138,7 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
 
       <section>
         <h2 className={ui.h2}>在籍クラス</h2>
+        {cool && <p className="mb-3 px-1 text-sm leading-relaxed text-[#5B6661]">いまは{cool.label}です（1クール{settings.lessonsPerCool}回）。ご入会後は自動で継続し、退会はクールの終わりにお手続きとなります。</p>}
         {current.length === 0 ? (
           <p className={`${ui.card} text-base text-[#5B6661]`}>在籍しているクラスはありません。お申し込みはスクールにご連絡ください。</p>
         ) : (
@@ -126,6 +146,7 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
             {current.map((e) => (
               <li key={e.id} className={ui.card}>
                 <p className="text-base font-bold">{e.schoolClass.name}{e.schoolClass.target === "JUNIOR" && <span className="ml-2 align-middle"><Chip tone="info">{TARGET_LABEL.JUNIOR}</Chip></span>}</p>
+                {e.plan && <p className="mt-0.5 text-sm">{e.plan.name}</p>}
                 <p className="mt-1 text-sm text-[#5B6661]">
                   毎週{WEEKDAYS[e.schoolClass.weekday]}曜日 {e.schoolClass.startTime}〜（{e.schoolClass.durationMin}分）・{e.schoolClass.court.name}
                   {e.schoolClass.level && `・${e.schoolClass.level.name}`}{e.schoolClass.coach && `・コーチ ${e.schoolClass.coach.name}`}
@@ -165,7 +186,7 @@ export default async function SchoolPage({ searchParams }: { searchParams: Promi
             {credits.map((c) => (
               <li key={c.id} className="flex justify-between gap-4 py-3 text-base">
                 <span>{c.reason}</span>
-                <span className="text-[#5B6661]">{fmtDate(c.expiresAt)}まで</span>
+                <span className="text-[#5B6661]">{expiryText(c.expiresAt)}</span>
               </li>
             ))}
           </ul>

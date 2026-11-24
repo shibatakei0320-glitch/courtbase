@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/members", label: "会員" },
     ...(SCHOOL
       ? [
+          { href: "/attendance", label: "出欠", section: "スクール" },
           { href: "/classes", label: "クラス", section: "スクール" },
           { href: "/enrollments", label: "在籍台帳", section: "スクール" },
           { href: "/makeups", label: "振替", section: "スクール" },

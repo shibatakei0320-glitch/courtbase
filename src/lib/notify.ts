@@ -4,7 +4,7 @@ import { db } from "./db";
 import { lineTo } from "./family";
 import { pushLine } from "./line-message";
 import { appUrl } from "./url";
-import { fmtTime, jstDateKey, yen } from "./format";
+import { expiryText, fmtTime, jstDateKey, yen } from "./format";
 import { categoryLabel, entryName } from "./entry";
 
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
@@ -31,6 +31,10 @@ function body(r: NonNullable<Awaited<ReturnType<typeof load>>>["r"]) {
 export async function notifyBooked(reservationId: string, amount = 0) {
   const x = await load(reservationId);
   if (!x) return;
+  if (x.r.kind === "FREE") {
+    await pushLine(lineTo(x.r.member), `【${x.name}】フリーコースの予約が確定しました\n\n${body(x.r)}\n\n予定の確認・取り消しはこちら\n${appUrl()}/my/school`);
+    return;
+  }
   if (x.r.kind === "MAKEUP") {
     await pushLine(lineTo(x.r.member), `【${x.name}】振替の予約が確定しました\n\n${body(x.r)}\n\n取り消すと振替は戻ります。\n${appUrl()}/my/school`);
     return;
@@ -87,7 +91,7 @@ export async function notifyWaitlist(categoryId: string) {
 export async function notifyAbsence(reservationId: string, creditExpires: Date | null) {
   const x = await load(reservationId);
   if (!x) return;
-  const credit = creditExpires ? `\n\n振替が1回分付きました（${jstDateKey(creditExpires).replaceAll("-", "/")}まで）。「振替予約」から空きのある回を選べます。` : "";
+  const credit = creditExpires ? `\n\n振替が1回分付きました（${expiryText(creditExpires)}）。「振替予約」から空きのある回を選べます。` : "";
   await pushLine(lineTo(x.r.member), `【${x.name}】欠席を受け付けました\n\n${body(x.r)}${credit}`);
 }
 

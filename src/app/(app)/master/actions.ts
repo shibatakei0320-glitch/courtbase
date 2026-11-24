@@ -22,6 +22,16 @@ export async function savePlan(_: ActionState, fd: FormData): Promise<ActionStat
     description: optStr(fd, "description"),
     active: id ? bool(fd, "active") : true,
     sortOrder: int(fd, "sortOrder"),
+    ...(fd.has("course")
+      ? {
+          course: ["ENJOY", "ACADEMY"].includes(str(fd, "course")) ? str(fd, "course") : null,
+          target: str(fd, "target") === "JUNIOR" ? ("JUNIOR" as const) : str(fd, "target") === "ADULT" ? ("ADULT" as const) : null,
+          levelId: optStr(fd, "levelId"),
+          lessonsPerMonth: str(fd, "freq") === "4" ? 4 : str(fd, "freq") === "8" ? 8 : null,
+          freeMax: str(fd, "freq") === "free" ? Math.max(1, int(fd, "freeMax", 16)) : null,
+          extraDiscount: Math.max(0, int(fd, "extraDiscount")),
+        }
+      : {}),
   };
   if (id) await db.plan.update({ where: { id }, data });
   else await db.plan.create({ data });

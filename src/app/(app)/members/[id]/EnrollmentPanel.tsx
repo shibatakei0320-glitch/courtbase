@@ -3,7 +3,7 @@ import { ActionForm, Submit } from "@/components/ActionForm";
 import { Badge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { fmtDate, jstDateKey } from "@/lib/format";
-import { WEEKDAYS, monthKey, todayKey } from "@/lib/school";
+import { WEEKDAYS, coolOf, monthKey, schoolSettings, todayKey } from "@/lib/school";
 import { shiftMonth } from "@/lib/tuition";
 import { addLeave, endEnrollment, enroll, removeLeave, transferEnrollment, withdrawAll } from "../../classes/actions";
 
@@ -12,7 +12,7 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
   const now = new Date();
   const today = todayKey();
   const [enrollments, leaves, classes, credits, invoices] = await Promise.all([
-    db.enrollment.findMany({ where: { memberId }, include: { schoolClass: { include: { level: true, plan: true } } }, orderBy: { startDate: "desc" } }),
+    db.enrollment.findMany({ where: { memberId }, include: { schoolClass: { include: { level: true, plan: true } }, plan: true }, orderBy: { startDate: "desc" } }),
     db.leave.findMany({ where: { memberId }, orderBy: { fromMonth: "desc" } }),
     db.schoolClass.findMany({ where: { active: true }, include: { plan: true, _count: { select: { enrollments: true } } }, orderBy: [{ weekday: "asc" }, { startTime: "asc" }] }),
     db.makeupCredit.count({ where: { memberId, status: "AVAILABLE", expiresAt: { gt: now } } }),
@@ -22,7 +22,16 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
   const past = enrollments.filter((e) => !current.includes(e));
   const thisMonth = monthKey(now);
   const leaveNow = leaves.find((l) => l.fromMonth <= thisMonth && thisMonth <= l.toMonth);
-  const monthly = current.filter((e) => e.startDate <= now).reduce((a, e) => a + (e.schoolClass.plan?.price ?? 0), 0);
+  // プランごとに1回（月8回で2クラスなど）
+  const planSet = new Map<string, number>();
+  for (const e of current.filter((x) => x.startDate <= now)) {
+    const p = e.plan ?? e.schoolClass.plan;
+    if (p) planSet.set(p.id, p.price);
+  }
+  const monthly = [...planSet.values()].reduce((a, b) => a + b, 0);
+  const plans = await db.plan.findMany({ where: { kind: "MONTHLY", active: true }, orderBy: { sortOrder: "asc" } });
+  const settings = await schoolSettings();
+  const cool = coolOf(now, settings.coolMonths);
   const label = (c: (typeof classes)[number]) => `${WEEKDAYS[c.weekday]} ${c.startTime} ${c.name}${c.plan ? `（¥${c.plan.price.toLocaleString()}）` : ""}`;
 
   return (
@@ -41,7 +50,7 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span>
                     <Link className="font-medium text-brand-700 hover:underline" href={`/classes/${e.classId}`}>{e.schoolClass.name}</Link>
-                    <span className="ml-2 text-xs text-slate-500">{WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime}{e.schoolClass.level && `・${e.schoolClass.level.name}`}・{e.schoolClass.plan ? `¥${e.schoolClass.plan.price.toLocaleString()}` : "月謝未設定"}</span>
+                    <span className="ml-2 text-xs text-slate-500">{WEEKDAYS[e.schoolClass.weekday]} {e.schoolClass.startTime}{e.schoolClass.level && `・${e.schoolClass.level.name}`}・{(e.plan ?? e.schoolClass.plan)?.name ?? "月謝未設定"}{(e.plan ?? e.schoolClass.plan)?.freeMax ? "（会員ページから予約）" : ""}</span>
                   </span>
                   <span className="text-xs text-slate-500">{fmtDate(e.startDate)}〜{e.endDate ? `${fmtDate(e.endDate)}まで` : ""}{e.startDate > now && <span className="ml-1"><Badge tone="blue">開始前</Badge></span>}</span>
                 </div>
@@ -87,8 +96,15 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
                 {classes.map((c) => <option key={c.id} value={c.id}>{label(c)}</option>)}
               </select>
             </label>
+            <label className="block min-w-[14rem] flex-1"><span className="label">受講プラン</span>
+              <select className="input" name="planId" defaultValue="">
+                <option value="">クラスの標準プラン</option>
+                {plans.map((p) => <option key={p.id} value={p.id}>{p.name}（¥{p.price.toLocaleString()}）</option>)}
+              </select>
+            </label>
             <label className="block"><span className="label">開始日</span><input className="input" type="date" name="startDate" defaultValue={today} /></label>
             <Submit className="btn-primary">追加</Submit>
+            <p className="w-full text-xs text-slate-500">月8回は、週2クラスに同じプランで在籍登録します（月謝は1回分）。フリーは登録クラスを1つ選ぶと、そのクラスと下のレベルの回を会員が予約できます。</p>
           </ActionForm>
         </div>
         {past.length > 0 && (
@@ -102,10 +118,10 @@ export async function EnrollmentPanel({ memberId }: { memberId: string }) {
             <summary className="cursor-pointer text-red-700">スクールを退会（すべてのクラス）</summary>
             <ActionForm action={withdrawAll} className="mt-3 flex flex-wrap items-end gap-2" confirm="すべてのクラスの在籍を終了しますか？以降の出席予定は消えます">
               <input type="hidden" name="memberId" value={memberId} />
-              <label className="block"><span className="label">最終日（この日のレッスンまで）</span><input className="input" type="date" name="endDate" defaultValue={monthEnd(today)} /></label>
+              <label className="block"><span className="label">最終日（この日のレッスンまで）</span><input className="input" type="date" name="endDate" defaultValue={cool ? cool.last : monthEnd(today)} /></label>
               <Submit className="btn-danger">退会の手続き</Submit>
             </ActionForm>
-            <p className="mt-2 text-xs text-slate-500">月謝は最終日の月まで（按分の設定に従う）。振替の残りはそのまま期限まで使えます。</p>
+            <p className="mt-2 text-xs text-slate-500">{cool ? `クール制のため、退会はクールの終わり（${cool.label}は ${cool.last.replaceAll("-", "/")}）が原則です。` : ""}月謝は最終日の月まで。振替は在籍中のみ有効なので、最終日で失効します。</p>
           </details>
         )}
       </div>

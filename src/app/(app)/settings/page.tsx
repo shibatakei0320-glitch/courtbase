@@ -12,7 +12,7 @@ export const metadata = { title: "施設設定" };
 export default async function SettingsPage() {
   await requireStaff(["OWNER"]);
   const found = await db.setting.findUnique({ where: { id: 1 } });
-  const s = found ?? { facilityName: BRAND, openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", admissionFee: 0, leaveFee: 0, prorateMidMonth: true, debitConsignorCode: null, debitConsignorName: null, debitBankCode: "0170", debitBankName: "ﾔﾏｸﾞﾁ", debitBranchCode: null, debitBranchName: null, debitAccountType: 1, debitAccountNo: null, debitDay: 27, stringNotify: true, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
+  const s = found ?? { facilityName: BRAND, openHour: 7, closeHour: 23, cancelDeadlineHours: 24, sessionHours: 12, contactEmail: null, facilityMode: false, absenceDeadlineHours: 0, makeupValidDays: 60, makeupLevelRule: "SAME_OR_LOWER", makeupCrossCourse: true, coolMonths: 3, lessonsPerCool: 12, admissionFee: 0, leaveFee: 0, prorateMidMonth: true, debitConsignorCode: null, debitConsignorName: null, debitBankCode: "0170", debitBankName: "ﾔﾏｸﾞﾁ", debitBranchCode: null, debitBranchName: null, debitAccountType: 1, debitAccountNo: null, debitDay: 27, stringNotify: true, legalSeller: null, legalManager: null, legalAddress: null, legalPhone: null, legalEmail: null, legalNotes: null, termsText: null, privacyText: null };
   return (
     <>
       <PageHeader title="施設設定" />
@@ -38,12 +38,18 @@ export default async function SettingsPage() {
             <p className="mt-1 text-xs text-slate-500">クラス在籍者が会員ページから欠席連絡すると、振替の権利が1回分付きます。権利を使って、空きのある別の回を予約できます。</p>
           </div>
           <label className="block"><span className="label">欠席連絡の期限（開始の何時間前まで）</span><input className="input" type="number" name="absenceDeadlineHours" min={0} max={168} defaultValue={s.absenceDeadlineHours} /><span className="mt-1 block text-xs text-slate-500">0 なら開始時刻まで。期限後の欠席は振替なし（スタッフは期限後も受付可）</span></label>
-          <label className="block"><span className="label">振替の有効期限（欠席した日から何日）</span><input className="input" type="number" name="makeupValidDays" min={1} max={365} defaultValue={s.makeupValidDays} /></label>
+          <label className="block"><span className="label">振替の有効期限（欠席した日から何日）</span><input className="input" type="number" name="makeupValidDays" min={0} max={365} defaultValue={s.makeupValidDays} /><span className="mt-1 block text-xs text-slate-500">0 なら期限なし（在籍中は有効、退会で失効）</span></label>
           <label className="block sm:col-span-2"><span className="label">振替できるレベル</span>
             <select className="input" name="makeupLevelRule" defaultValue={s.makeupLevelRule}>
               {Object.entries(LEVEL_RULE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" name="makeupCrossCourse" defaultChecked={s.makeupCrossCourse} />成人は、エンジョイ・アカデミーのコースをまたいで振替できる（ジュニアは同じコースのみ）</label>
+          <label className="block"><span className="label">クール制（何か月で1クール）</span>
+            <select className="input" name="coolMonths" defaultValue={String(s.coolMonths)}><option value="3">3か月（4–6月・7–9月・10–12月・1–3月）</option><option value="6">6か月</option><option value="1">1か月</option><option value="0">クール制なし</option></select>
+            <span className="mt-1 block text-xs text-slate-500">退会はクールの終わり。回の作成もクール単位で行えます</span>
+          </label>
+          <label className="block"><span className="label">1クールのレッスン回数</span><input className="input" type="number" name="lessonsPerCool" min={1} max={52} defaultValue={s.lessonsPerCool} /></label>
           <div className="mt-4 border-t pt-6 sm:col-span-2">
             <h2 className="font-semibold">月謝</h2>
             <p className="mt-1 text-xs text-slate-500">クラスごとの月謝は、クラスの設定で月額プランを選びます。</p>
