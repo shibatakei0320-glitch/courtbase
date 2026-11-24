@@ -11,7 +11,8 @@ import { applyTemplate } from "./actions";
 
 export const metadata = { title: "クラス" };
 
-export default async function ClassesPage() {
+export default async function ClassesPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const { view } = await searchParams;
   const me = await requireStaff();
   const now = new Date();
   const [classes, levels, courts, coaches, plans] = await Promise.all([
@@ -32,7 +33,11 @@ export default async function ClassesPage() {
     db.plan.findMany({ where: { kind: "MONTHLY" }, orderBy: { sortOrder: "asc" } }),
   ]);
   const manage = canManage(me.role);
-  const byDay = WEEKDAYS.map((w, i) => ({ w, i, list: classes.filter((c) => c.weekday === i) })).filter((d) => d.list.length);
+  // 12月までの今のクラス（【〜12月】）と、1月からのホームページの時間割を分けて表示
+  const hasCurrent = classes.some((c) => c.name.startsWith("【〜12月】"));
+  const showNext = view === "next";
+  const shown = hasCurrent ? classes.filter((c) => c.name.startsWith("【〜12月】") !== showNext) : classes;
+  const byDay = WEEKDAYS.map((w, i) => ({ w, i, list: shown.filter((c) => c.weekday === i) })).filter((d) => d.list.length);
   // 月曜はじまりで並べる
   byDay.sort((a, b) => ((a.i + 6) % 7) - ((b.i + 6) % 7));
 
@@ -41,7 +46,13 @@ export default async function ClassesPage() {
       <PageHeader title="クラス（定期レッスン）" actions={<Link href="/makeups" className="btn-secondary">振替の管理</Link>} />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {classes.length > 0 && <Timetable classes={classes.map((c) => ({ ...c, enrolled: c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now).length }))} />}
+          {hasCurrent && (
+            <nav className="flex gap-1">
+              <Link href="/classes" className={`rounded-full px-4 py-1.5 text-sm ${!showNext ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>12月まで（今のクラス）</Link>
+              <Link href="/classes?view=next" className={`rounded-full px-4 py-1.5 text-sm ${showNext ? "bg-brand-600 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>1月から（ホームページの時間割）</Link>
+            </nav>
+          )}
+          {shown.length > 0 && <Timetable classes={shown.map((c) => ({ ...c, enrolled: c.enrollments.filter((e) => enrollmentCovers(e, now) || e.startDate > now).length }))} />}
           {classes.length === 0 && manage && (
             <div className="card border-brand-500 p-5">
               <h2 className="font-semibold">48K萩校の時間割・料金をまとめて登録</h2>

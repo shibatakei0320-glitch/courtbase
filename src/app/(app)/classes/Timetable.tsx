@@ -38,7 +38,7 @@ export function Timetable({ classes }: { classes: C[] }) {
                         <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${c.target === "JUNIOR" ? "bg-emerald-700 text-white" : "bg-slate-800 text-white"}`}>{c.target === "JUNIOR" ? "ジュニア" : "成人"}</span>
                         <span className="opacity-80">{t}–{endTime(t, c.durationMin)}</span>
                       </span>
-                      <span className="mt-1 block text-sm font-bold leading-tight">{c.course === "ACADEMY" ? "アカデミー" : "エンジョイ"}</span>
+                      <span className="mt-1 block text-sm font-bold leading-tight">{c.course === "ACADEMY" ? "アカデミー" : c.level ? c.level.name : /幼児|小学生/.exec(c.name)?.[0] ?? "エンジョイ"}</span>
                       {c.course === "ACADEMY" && c.level && <span className="block text-[11px] font-bold leading-tight">{c.level.name}</span>}
                       <span className={`mt-1 block text-right text-[11px] ${c.enrolled >= c.capacity ? "font-bold" : "opacity-80"}`}>在籍 {c.enrolled}/{c.capacity}</span>
                     </Link>
