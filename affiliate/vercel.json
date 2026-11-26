@@ -1,0 +1,5 @@
+{
+  "buildCommand": "node build.mjs",
+  "installCommand": "echo skip",
+  "outputDirectory": "dist"
+}

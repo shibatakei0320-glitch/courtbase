@@ -1,0 +1,20 @@
+[
+  {
+    "id": "sample-tennis-school",
+    "name": "サンプル テニススクール（※差し替え用）",
+    "network": "a8",
+    "category": "テニススクール",
+    "rewardType": "無料体験予約",
+    "rewardMemo": "A8管理画面で確認した報酬額をメモ（サイトには表示されません）",
+    "affiliateUrl": "",
+    "impressionPixel": "",
+    "officialUrl": "",
+    "price": "【要確認】月額◯円〜",
+    "trial": "【要確認】体験レッスン◯円",
+    "areas": ["【要確認】"],
+    "pros": ["【要確認】公式サイトで確認した特徴を書く"],
+    "cons": ["【要確認】"],
+    "lastVerified": "2026-11-26",
+    "active": false
+  }
+]

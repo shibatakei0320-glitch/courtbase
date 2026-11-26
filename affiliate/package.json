@@ -1,0 +1,14 @@
+{
+  "name": "courtbase-affiliate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:drafts": "node build.mjs --drafts",
+    "check": "node scripts/check.mjs",
+    "draft": "node scripts/draft.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.14.0"
+  }
+}
