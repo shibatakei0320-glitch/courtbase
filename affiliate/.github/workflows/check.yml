@@ -1,14 +1,13 @@
 name: affiliate-check
 on:
   push:
-    paths: ["affiliate/**", ".github/workflows/affiliate.yml"]
+    branches: [main]
   schedule:
     - cron: "17 0 * * 1" # 毎週月曜 09:17 JST: 広告リンク死活・情報の鮮度チェック
   workflow_dispatch:
 jobs:
   check:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: affiliate } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

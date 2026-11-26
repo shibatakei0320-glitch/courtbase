@@ -1,11 +1,11 @@
 [
   {
-    "id": "sample-tennis-school",
-    "name": "サンプル テニススクール（※差し替え用）",
+    "id": "sample-pilates",
+    "name": "サンプル マシンピラティス（※差し替え用）",
     "network": "a8",
-    "category": "テニススクール",
-    "rewardType": "無料体験予約",
-    "rewardMemo": "A8管理画面で確認した報酬額をメモ（サイトには表示されません）",
+    "category": "マシンピラティス",
+    "rewardType": "体験予約",
+    "rewardMemo": "A8管理画面で確認した報酬額・成果条件をメモ（サイトには表示されません）",
     "affiliateUrl": "",
     "impressionPixel": "",
     "officialUrl": "",

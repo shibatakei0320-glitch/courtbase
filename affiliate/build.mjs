@@ -83,9 +83,9 @@ write("index.html", layout({
 
 write("about/index.html", layout({
   title: `運営者情報・広告ポリシー｜${site.name}`, description: `${site.name}の運営者情報と広告掲載ポリシー`, canonical: `${base}/about/`, hasAds: false,
-  body: `<h1>運営者情報・広告ポリシー</h1><h2>運営者</h2><p>${esc(site.operator)}</p><p>${esc(site.operatorProfile)}</p><p>お問い合わせ: ${esc(site.contact)}</p>
+  body: `<h1>運営者情報・広告ポリシー</h1><h2>運営者</h2><p>${esc(site.operator)}</p><p>${esc(site.operatorProfile)}</p><p>お問い合わせ: ${/^https?:/.test(site.contact) ? `<a href="${esc(site.contact)}" rel="nofollow">お問い合わせフォーム</a>` : esc(site.contact)}</p>
 <h2>広告について</h2><p>当サイトはA8.netなどのアフィリエイトプログラムに参加しており、記事内のリンクから申込み・登録があった場合に運営者が報酬を受け取ることがあります。広告を含むページには「PR」「プロモーションを含みます」と表示しています。報酬の有無によって評価を変えることはありません。</p>
-<h2>情報の正確性</h2><p>料金・キャンペーン等は各記事に記載の確認日時点の情報です。最新情報は必ず公式サイトでご確認ください。</p>
+<h2>情報の正確性</h2><p>料金・キャンペーン等は各記事に記載の確認日時点の情報です。最新情報は公式サイトでご確認ください。</p><h2>健康に関する情報について</h2><p>当サイトの内容は運動やサービス選びの参考情報であり、医学的な助言ではありません。持病のある方・妊娠中の方などは、運動を始める前に医師にご相談ください。</p>
 <h2>アクセス解析・Cookie</h2><p>アフィリエイトの成果確認のため、広告配信事業者がCookieを使用する場合があります。</p>`,
 }));
 
